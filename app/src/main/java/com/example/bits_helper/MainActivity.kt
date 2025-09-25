@@ -3,6 +3,9 @@ package com.example.bits_helper   // ← замени на свой namespace
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +17,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,22 +26,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.bits_helper.data.AppDatabase
+import com.example.bits_helper.data.CartridgeRepository
+import com.example.bits_helper.ui.CartridgeUi
+import com.example.bits_helper.ui.CartridgeViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { App() }
+        val repository = CartridgeRepository(AppDatabase.get(applicationContext).cartridgeDao())
+        setContent {
+            val vm: CartridgeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    @Suppress("UNCHECKED_CAST")
+                    return CartridgeViewModel(repository) as T
+                }
+            })
+            App(vm)
+        }
     }
 }
 
 @Composable
-fun App() {
+fun App(vm: CartridgeViewModel) {
     MaterialTheme(colorScheme = lightColorScheme()) {
         Scaffold(
             containerColor = Color(0xFFF5F6F7),
             topBar = { HeaderBar() },      // закреплённая шапка
             bottomBar = { BottomBar() }    // две одинаковые по стилю кнопки
         ) { padding ->
+            val items = vm.cartridges.collectAsState(initial = emptyList()).value
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -48,7 +66,7 @@ fun App() {
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(demoItems()) { item ->
+                items(items) { item ->
                     CartridgeCard(item, Modifier.fillMaxWidth())
                 }
             }
@@ -130,8 +148,6 @@ fun BottomBar() {
 
 /* =================== ЭЛЕМЕНТЫ UI =================== */
 
-data class Cartridge(val number: String, val room: String, val model: String, val date: String)
-
 @Composable
 fun PillStat(text: String, bg: Long, dot: Long) {
     Row(
@@ -174,7 +190,7 @@ fun SummaryPill(text: String) {
 }
 
 @Composable
-fun CartridgeCard(item: Cartridge, modifier: Modifier = Modifier) {
+fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
@@ -232,8 +248,4 @@ fun InfoRow(label: String, value: String) {
     }
 }
 
-/* =================== DEMO DATA =================== */
-
-private fun demoItems(): List<Cartridge> = List(12) {
-    Cartridge(number = "11817", room = "5", model = "6115", date = "2024-09-25")
-}
+// Демоданные больше не нужны, всё приходит из БД через ViewModel
