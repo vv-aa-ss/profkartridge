@@ -26,6 +26,8 @@ import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ReportProblem
 import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -75,7 +77,18 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(vm: CartridgeViewModel) {
-    MaterialTheme(colorScheme = lightColorScheme()) {
+    val fluentColors = lightColorScheme(
+        primary = Color(0xFF0078D4),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFFD0E7FF),
+        onPrimaryContainer = Color(0xFF001A33),
+        secondary = Color(0xFF6B7280),
+        surface = Color(0xFFF6F8FB),
+        onSurface = Color(0xFF0F172A),
+        surfaceVariant = Color(0xFFE6EAF0),
+        outline = Color(0xFFD1D5DB)
+    )
+    MaterialTheme(colorScheme = fluentColors) {
         var showAddDialog by remember { mutableStateOf(false) }
         var changingId by remember { mutableStateOf<Long?>(null) }
         var showSheet by remember { mutableStateOf(false) }
@@ -191,6 +204,7 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit) {
             uri ?: return@rememberLauncherForActivityResult
             scope.launch { importDatabase(ctx, uri) }
         }
+        var menuExpanded by remember { mutableStateOf(false) }
 
         // «+»
         FilledTonalButton(
@@ -203,24 +217,42 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit) {
             Icon(Icons.Rounded.Add, contentDescription = "Добавить", modifier = Modifier.size(28.dp))
         }
 
-        // «Штрихкод» — тот же стиль, только с текстом
+        // Сканер (QR/штрихкод) — иконка, пока без реализации
         FilledTonalButton(
-            onClick = { createDoc.launch("bits_helper.db") },
+            onClick = { /* TODO: открыть камеру/сканер */ },
             shape = RoundedCornerShape(18.dp),
             modifier = Modifier.weight(1f).height(56.dp),
             colors = filled
         ) {
-            Text("Экспорт БД", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Rounded.QrCodeScanner, contentDescription = "Сканер", modifier = Modifier.size(28.dp))
         }
 
-        // Временная третья кнопка: Импорт
-        FilledTonalButton(
-            onClick = { openDoc.launch(arrayOf("application/octet-stream", "*/*")) },
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.weight(1f).height(56.dp),
-            colors = filled
-        ) {
-            Text("Импорт БД", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        // Меню (импорт/экспорт)
+        Box(Modifier.weight(1f).height(56.dp)) {
+            FilledTonalButton(
+                onClick = { menuExpanded = true },
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxSize(),
+                colors = filled
+            ) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "Меню", modifier = Modifier.size(24.dp))
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("Экспорт БД") },
+                    onClick = {
+                        menuExpanded = false
+                        createDoc.launch("bits_helper.db")
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Импорт БД") },
+                    onClick = {
+                        menuExpanded = false
+                        openDoc.launch(arrayOf("application/octet-stream", "*/*"))
+                    }
+                )
+            }
         }
     }
 }
