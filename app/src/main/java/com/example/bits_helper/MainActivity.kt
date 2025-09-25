@@ -1,8 +1,12 @@
 package com.example.bits_helper   // ← замени на свой namespace
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -15,12 +19,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.LocalShipping
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.ReportProblem
+import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,6 +45,12 @@ import com.example.bits_helper.data.AppDatabase
 import com.example.bits_helper.data.CartridgeRepository
 import com.example.bits_helper.ui.CartridgeUi
 import com.example.bits_helper.ui.CartridgeViewModel
+import com.example.bits_helper.data.exportDatabase
+import com.example.bits_helper.data.importDatabase
+import com.example.bits_helper.data.Status
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,10 +71,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App(vm: CartridgeViewModel) {
     MaterialTheme(colorScheme = lightColorScheme()) {
+        var showAddDialog by remember { mutableStateOf(false) }
         Scaffold(
             containerColor = Color(0xFFF5F6F7),
             topBar = { HeaderBar() },      // закреплённая шапка
-            bottomBar = { BottomBar() }    // две одинаковые по стилю кнопки
+            bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }) }    // две одинаковые по стилю кнопки
         ) { padding ->
             val items = vm.cartridges.collectAsState(initial = emptyList()).value
             LazyColumn(
@@ -69,6 +91,15 @@ fun App(vm: CartridgeViewModel) {
                 items(items) { item ->
                     CartridgeCard(item, Modifier.fillMaxWidth())
                 }
+            }
+            if (showAddDialog) {
+                AddCartridgeDialog(
+                    onDismiss = { showAddDialog = false },
+                    onSave = { number, room, model, date, status, notes ->
+                        vm.add(number, room, model, date, status, notes)
+                        showAddDialog = false
+                    }
+                )
             }
         }
     }
@@ -109,7 +140,7 @@ fun HeaderBar() {
 /* =================== КНОПКИ СНИЗУ =================== */
 
 @Composable
-fun BottomBar() {
+fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -122,10 +153,20 @@ fun BottomBar() {
         val filled = ButtonDefaults.filledTonalButtonColors(
             containerColor = Color(0xFFEDE9FE)   // мягкая сиреневая заливка
         )
+        val ctx = LocalContext.current
+        val scope = remember { CoroutineScope(Dispatchers.IO) }
+        val createDoc = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+            uri ?: return@rememberLauncherForActivityResult
+            scope.launch { exportDatabase(ctx, uri) }
+        }
+        val openDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            uri ?: return@rememberLauncherForActivityResult
+            scope.launch { importDatabase(ctx, uri) }
+        }
 
         // «+»
         FilledTonalButton(
-            onClick = { /* TODO */ },
+            onClick = { onAddClicked() },
             shape = RoundedCornerShape(18.dp),
             modifier = Modifier.weight(1f).height(56.dp),
             contentPadding = PaddingValues(0.dp),
@@ -136,12 +177,22 @@ fun BottomBar() {
 
         // «Штрихкод» — тот же стиль, только с текстом
         FilledTonalButton(
-            onClick = { /* TODO */ },
+            onClick = { createDoc.launch("bits_helper.db") },
             shape = RoundedCornerShape(18.dp),
             modifier = Modifier.weight(1f).height(56.dp),
             colors = filled
         ) {
-            Text("Штрихкод", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text("Экспорт БД", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        }
+
+        // Временная третья кнопка: Импорт
+        FilledTonalButton(
+            onClick = { openDoc.launch(arrayOf("application/octet-stream", "*/*")) },
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.weight(1f).height(56.dp),
+            colors = filled
+        ) {
+            Text("Импорт БД", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -199,17 +250,7 @@ fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFFE5F8E9))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF16A34A)))
-                    Spacer(Modifier.width(8.dp))
-                    Text("В работе", fontSize = 14.sp, color = Color(0xFF0F172A))
-                }
+                StatusBadge(item.status)
                 Spacer(Modifier.width(12.dp))
                 Text(item.number, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = Color(0xFF0F172A))
                 Spacer(Modifier.width(8.dp))
@@ -233,6 +274,100 @@ fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier) {
             InfoRow("Модель:", item.model)
             Spacer(Modifier.height(6.dp))
             InfoRow("Дата:", item.date)
+            if (!item.notes.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                InfoRow("Заметки:", item.notes ?: "")
+            }
+        }
+    }
+}
+
+@Composable
+fun StatusBadge(status: Status) {
+    val (bgColor, dotColor, label) = when (status) {
+        Status.ISSUED -> Triple(0xFFE5F8E9, 0xFF16A34A, "Роздан")
+        Status.IN_REFILL -> Triple(0xFFFFF5CC, 0xFFEAB308, "На заправке")
+        Status.COLLECTED -> Triple(0xFFE5E7EB, 0xFF6B7280, "Собран")
+        Status.RECEIVED -> Triple(0xFFDBEAFE, 0xFF1D4ED8, "Получен")
+        Status.LOST -> Triple(0xFFFFE4E6, 0xFFEF4444, "Потерян")
+        Status.WRITTEN_OFF -> Triple(0xFFFCE7F3, 0xFFDB2777, "Списан")
+    }
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(bgColor))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dotColor)))
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontSize = 14.sp, color = Color(0xFF0F172A))
+    }
+}
+
+@Composable
+fun AddCartridgeDialog(
+    onDismiss: () -> Unit,
+    onSave: (number: String, room: String, model: String, date: String, status: Status, notes: String?) -> Unit
+) {
+    var number by remember { mutableStateOf("") }
+    var room by remember { mutableStateOf("") }
+    var model by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf(Status.ISSUED) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(number.trim(), room.trim(), model.trim(), date.trim(), status, notes.ifBlank { null })
+            }) { Text("Сохранить") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+        title = { Text("Новый картридж", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = number, onValueChange = { number = it }, label = { Text("Номер") })
+                OutlinedTextField(value = room, onValueChange = { room = it }, label = { Text("Кабинет") })
+                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Модель") })
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Дата (YYYY-MM-DD)") })
+                StatusDropdown(status = status, onChange = { status = it })
+                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки") })
+            }
+        }
+    )
+}
+
+@Composable
+fun StatusDropdown(status: Status, onChange: (Status) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        OutlinedButton(onClick = { expanded = true }, shape = RoundedCornerShape(12.dp)) {
+            Text(
+                when (status) {
+                    Status.ISSUED -> "Роздан"
+                    Status.IN_REFILL -> "На заправке"
+                    Status.COLLECTED -> "Собран"
+                    Status.RECEIVED -> "Получен"
+                    Status.LOST -> "Потерян"
+                    Status.WRITTEN_OFF -> "Списан"
+                }
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            @Composable
+            fun item(opt: Status, label: String) {
+                DropdownMenuItem(text = { Text(label) }, onClick = { onChange(opt); expanded = false })
+            }
+            item(Status.ISSUED, "Роздан")
+            item(Status.IN_REFILL, "На заправке")
+            item(Status.COLLECTED, "Собран")
+            item(Status.RECEIVED, "Получен")
+            item(Status.LOST, "Потерян")
+            item(Status.WRITTEN_OFF, "Списан")
         }
     }
 }
