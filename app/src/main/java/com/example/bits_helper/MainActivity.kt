@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -26,6 +27,9 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ReportProblem
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material3.*
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
@@ -68,13 +72,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(vm: CartridgeViewModel) {
     MaterialTheme(colorScheme = lightColorScheme()) {
         var showAddDialog by remember { mutableStateOf(false) }
+        var changingId by remember { mutableStateOf<Long?>(null) }
+        var showSheet by remember { mutableStateOf(false) }
         Scaffold(
             containerColor = Color(0xFFF5F6F7),
-            topBar = { HeaderBar() },      // закреплённая шапка
+            topBar = { HeaderBar(vm) },      // закреплённая шапка
             bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }) }    // две одинаковые по стилю кнопки
         ) { padding ->
             val items = vm.cartridges.collectAsState(initial = emptyList()).value
@@ -89,7 +96,14 @@ fun App(vm: CartridgeViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(items) { item ->
-                    CartridgeCard(item, Modifier.fillMaxWidth())
+                    CartridgeCard(
+                        item,
+                        Modifier.fillMaxWidth(),
+                        onStatusClick = {
+                            changingId = item.id
+                            showSheet = true
+                        }
+                    )
                 }
             }
             if (showAddDialog) {
@@ -101,6 +115,15 @@ fun App(vm: CartridgeViewModel) {
                     }
                 )
             }
+            if (showSheet && changingId != null) {
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ModalBottomSheet(onDismissRequest = { showSheet = false }, sheetState = sheetState) {
+                    StatusSelectList(onPick = { st ->
+                        vm.updateStatus(changingId!!, st)
+                        showSheet = false
+                    })
+                }
+            }
         }
     }
 }
@@ -108,7 +131,7 @@ fun App(vm: CartridgeViewModel) {
 /* =================== HEADER (закреплённый) =================== */
 
 @Composable
-fun HeaderBar() {
+fun HeaderBar(vm: CartridgeViewModel) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -116,23 +139,28 @@ fun HeaderBar() {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        val counts = vm.countsByStatus.collectAsState(initial = emptyMap()).value
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PillStat("В работе: 9", bg = 0xFFE5F8E9, dot = 0xFF16A34A)
+            ClickablePill("Роздан: ${counts[Status.ISSUED] ?: 0}", 0xFFE5F8E9, 0xFF16A34A) { vm.setFilter(Status.ISSUED) }
             Spacer(Modifier.width(10.dp))
-            PillNeutral("Роздан: 2")
+            ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
             Spacer(Modifier.weight(1f))
-            SummaryPill("Всего: 20")
+            SummaryPill("Всего: ${counts.values.sum()}")
         }
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PillStat("Собран на заправку: 3", bg = 0xFFFFF5CC, dot = 0xFFEAB308)
+            ClickablePill("На заправке: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
             Spacer(Modifier.width(10.dp))
-            PillStat("На заправке: 1", bg = 0xFFFFE4E6, dot = 0xFFEF4444)
+            ClickablePill("Потерян: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
+        }
+        Row(Modifier.fillMaxWidth()) {
+            TextButton(onClick = { vm.setFilter(null) }) { Text("Сбросить фильтр") }
+            Spacer(Modifier.weight(1f))
         }
     }
 }
@@ -215,6 +243,22 @@ fun PillStat(text: String, bg: Long, dot: Long) {
 }
 
 @Composable
+fun ClickablePill(text: String, bg: Long, dot: Long, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(bg))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dot)))
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontSize = 14.sp, color = Color(0xFF0F172A))
+    }
+}
+
+@Composable
 fun PillNeutral(text: String) {
     Row(
         Modifier
@@ -241,7 +285,7 @@ fun SummaryPill(text: String) {
 }
 
 @Composable
-fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier) {
+fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClick: () -> Unit) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
@@ -250,7 +294,9 @@ fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusBadge(item.status)
+                Box(Modifier.clickable { onStatusClick() }) {
+                    StatusBadge(item.status)
+                }
                 Spacer(Modifier.width(12.dp))
                 Text(item.number, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = Color(0xFF0F172A))
                 Spacer(Modifier.width(8.dp))
@@ -369,6 +415,36 @@ fun StatusDropdown(status: Status, onChange: (Status) -> Unit) {
             item(Status.LOST, "Потерян")
             item(Status.WRITTEN_OFF, "Списан")
         }
+    }
+}
+
+@Composable
+fun StatusSelectList(onPick: (Status) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        @Composable
+        fun row(st: Status, label: String, bg: Long, dot: Long) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFFFFFFFF))
+                    .clickable { onPick(st) }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dot)))
+                Spacer(Modifier.width(10.dp))
+                Text(label, fontSize = 16.sp, color = Color(0xFF0F172A))
+                Spacer(Modifier.weight(1f))
+                AssistChip(onClick = { onPick(st) }, label = { Text("Выбрать") })
+            }
+        }
+        row(Status.ISSUED, "Роздан", 0xFFE5F8E9, 0xFF16A34A)
+        row(Status.IN_REFILL, "На заправке", 0xFFFFF5CC, 0xFFEAB308)
+        row(Status.COLLECTED, "Собран", 0xFFE5E7EB, 0xFF6B7280)
+        row(Status.RECEIVED, "Получен", 0xFFDBEAFE, 0xFF1D4ED8)
+        row(Status.LOST, "Потерян", 0xFFFFE4E6, 0xFFEF4444)
+        row(Status.WRITTEN_OFF, "Списан", 0xFFFCE7F3, 0xFFDB2777)
     }
 }
 
