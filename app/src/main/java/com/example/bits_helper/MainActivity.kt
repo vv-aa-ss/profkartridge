@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -92,10 +93,13 @@ fun App(vm: CartridgeViewModel) {
         var showAddDialog by remember { mutableStateOf(false) }
         var changingId by remember { mutableStateOf<Long?>(null) }
         var showSheet by remember { mutableStateOf(false) }
+        var addDialogInitialNumber by remember { mutableStateOf("") }
+        val snackbarHostState = remember { SnackbarHostState() }
         Scaffold(
             containerColor = Color(0xFFF5F6F7),
             topBar = { HeaderBar(vm) },      // закреплённая шапка
-            bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }) }    // две одинаковые по стилю кнопки
+            bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }) },
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
         ) { padding ->
             val items = vm.cartridges.collectAsState(initial = emptyList()).value
             LazyColumn(
@@ -125,7 +129,9 @@ fun App(vm: CartridgeViewModel) {
                     onSave = { number, room, model, date, status, notes ->
                         vm.add(number, room, model, date, status, notes)
                         showAddDialog = false
-                    }
+                        addDialogInitialNumber = ""
+                    },
+                    initialNumber = addDialogInitialNumber
                 )
             }
             if (showSheet && changingId != null) {
@@ -181,7 +187,7 @@ fun HeaderBar(vm: CartridgeViewModel) {
 /* =================== КНОПКИ СНИЗУ =================== */
 
 @Composable
-fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit) {
+fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostState: SnackbarHostState, onQrNotFound: (String) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -217,9 +223,25 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit) {
             Icon(Icons.Rounded.Add, contentDescription = "Добавить", modifier = Modifier.size(28.dp))
         }
 
-        // Сканер (QR/штрихкод) — иконка, пока без реализации
+        // Сканер (QR/штрихкод)
+        val scannerLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
+            val value = result.data?.getStringExtra("qr_value")?.trim()
+            if (!value.isNullOrEmpty()) {
+                vm.progressByNumber(value) { next ->
+                    CoroutineScope(Dispatchers.Main).launch {
+                        if (next != null) {
+                            val msg = "Статус обновлён: $next"
+                            snackbarHostState.showSnackbar(msg)
+                        } else {
+                            // Картридж не найден - открываем форму добавления с предзаполненным номером
+                            onQrNotFound(value)
+                        }
+                    }
+                }
+            }
+        }
         FilledTonalButton(
-            onClick = { /* TODO: открыть камеру/сканер */ },
+            onClick = { scannerLauncher.launch(Intent(ctx, ScannerActivity::class.java)) },
             shape = RoundedCornerShape(18.dp),
             modifier = Modifier.weight(1f).height(56.dp),
             colors = filled
@@ -366,7 +388,7 @@ fun StatusBadge(status: Status) {
         Status.ISSUED -> Triple(0xFFE5F8E9, 0xFF16A34A, "Роздан")
         Status.IN_REFILL -> Triple(0xFFFFF5CC, 0xFFEAB308, "На заправке")
         Status.COLLECTED -> Triple(0xFFE5E7EB, 0xFF6B7280, "Собран")
-        Status.RECEIVED -> Triple(0xFFDBEAFE, 0xFF1D4ED8, "Получен")
+        Status.RECEIVED -> Triple(0xFFDBEAFE, 0xFF1D4ED8, "Принят")
         Status.LOST -> Triple(0xFFFFE4E6, 0xFFEF4444, "Потерян")
         Status.WRITTEN_OFF -> Triple(0xFFFCE7F3, 0xFFDB2777, "Списан")
     }
@@ -386,20 +408,21 @@ fun StatusBadge(status: Status) {
 @Composable
 fun AddCartridgeDialog(
     onDismiss: () -> Unit,
-    onSave: (number: String, room: String, model: String, date: String, status: Status, notes: String?) -> Unit
+    onSave: (number: String, room: String, model: String, date: String, status: Status, notes: String?) -> Unit,
+    initialNumber: String = ""
 ) {
-    var number by remember { mutableStateOf("") }
+    var number by remember { mutableStateOf(initialNumber) }
     var room by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf(Status.ISSUED) }
+    var status by remember { mutableStateOf(Status.COLLECTED) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
-                onSave(number.trim(), room.trim(), model.trim(), date.trim(), status, notes.ifBlank { null })
+                val today = java.time.LocalDate.now().toString()
+                onSave(number.trim(), room.trim(), model.trim(), today, status, notes.ifBlank { null })
             }) { Text("Сохранить") }
         },
         dismissButton = {
@@ -411,7 +434,6 @@ fun AddCartridgeDialog(
                 OutlinedTextField(value = number, onValueChange = { number = it }, label = { Text("Номер") })
                 OutlinedTextField(value = room, onValueChange = { room = it }, label = { Text("Кабинет") })
                 OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Модель") })
-                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Дата (YYYY-MM-DD)") })
                 StatusDropdown(status = status, onChange = { status = it })
                 OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки") })
             }
@@ -443,7 +465,7 @@ fun StatusDropdown(status: Status, onChange: (Status) -> Unit) {
             item(Status.ISSUED, "Роздан")
             item(Status.IN_REFILL, "На заправке")
             item(Status.COLLECTED, "Собран")
-            item(Status.RECEIVED, "Получен")
+            item(Status.RECEIVED, "Принят")
             item(Status.LOST, "Потерян")
             item(Status.WRITTEN_OFF, "Списан")
         }
@@ -474,7 +496,7 @@ fun StatusSelectList(onPick: (Status) -> Unit) {
         row(Status.ISSUED, "Роздан", 0xFFE5F8E9, 0xFF16A34A)
         row(Status.IN_REFILL, "На заправке", 0xFFFFF5CC, 0xFFEAB308)
         row(Status.COLLECTED, "Собран", 0xFFE5E7EB, 0xFF6B7280)
-        row(Status.RECEIVED, "Получен", 0xFFDBEAFE, 0xFF1D4ED8)
+        row(Status.RECEIVED, "Принят", 0xFFDBEAFE, 0xFF1D4ED8)
         row(Status.LOST, "Потерян", 0xFFFFE4E6, 0xFFEF4444)
         row(Status.WRITTEN_OFF, "Списан", 0xFFFCE7F3, 0xFFDB2777)
     }

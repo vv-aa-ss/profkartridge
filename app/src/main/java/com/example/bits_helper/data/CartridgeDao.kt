@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CartridgeDao {
-    @Query("SELECT * FROM cartridges ORDER BY id DESC")
+    @Query("SELECT * FROM cartridges ORDER BY id ASC")
     fun observeAll(): Flow<List<CartridgeEntity>>
+
+    @Query("SELECT * FROM cartridges WHERE number = :number LIMIT 1")
+    suspend fun findByNumber(number: String): CartridgeEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(items: List<CartridgeEntity>)

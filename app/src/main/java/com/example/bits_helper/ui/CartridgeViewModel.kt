@@ -51,6 +51,13 @@ class CartridgeViewModel(
     fun updateStatus(id: Long, status: Status) {
         viewModelScope.launch { repository.updateStatus(id, status) }
     }
+
+    fun progressByNumber(number: String, onResult: (Status?) -> Unit) {
+        viewModelScope.launch {
+            val next = repository.progressStatusByNumber(number)
+            onResult(next)
+        }
+    }
 }
 
 private fun CartridgeEntity.toUi(): CartridgeUi =
