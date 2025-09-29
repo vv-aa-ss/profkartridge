@@ -18,16 +18,46 @@ class CartridgeRepository(
     }
 
     suspend fun progressStatusByNumber(number: String) : Status? {
-        val item = dao.findByNumber(number) ?: return null
-        val next = when (item.status) {
-            Status.ISSUED -> Status.COLLECTED      // Роздан -> Собран
-            Status.COLLECTED -> Status.IN_REFILL   // Собран -> На заправке
-            Status.IN_REFILL -> Status.RECEIVED    // На заправке -> Принят
-            Status.RECEIVED -> Status.ISSUED        // Принят -> Роздан (замыкаем круг)
-            Status.WRITTEN_OFF, Status.LOST -> item.status // Списан/Потерян не участвуют в цикле
+        // Ищем последнюю запись этого картриджа
+        val item = dao.findLatestByNumber(number) ?: return null
+        
+        when (item.status) {
+            Status.ISSUED -> {
+                // Если картридж "Роздан", создаем новую запись "Собран" с текущей датой
+                val today = java.time.LocalDate.now().toString()
+                val department = departmentDao.findByRoom(item.room)
+                val newItem = CartridgeEntity(
+                    number = item.number,
+                    room = item.room,
+                    model = item.model,
+                    date = today,
+                    status = Status.COLLECTED,
+                    notes = item.notes,
+                    department = department
+                )
+                dao.insertOne(newItem)
+                return Status.COLLECTED
+            }
+            Status.COLLECTED -> {
+                // Собран -> На заправке
+                dao.updateStatus(item.id, Status.IN_REFILL)
+                return Status.IN_REFILL
+            }
+            Status.IN_REFILL -> {
+                // На заправке -> Принят
+                dao.updateStatus(item.id, Status.RECEIVED)
+                return Status.RECEIVED
+            }
+            Status.RECEIVED -> {
+                // Принят -> Роздан
+                dao.updateStatus(item.id, Status.ISSUED)
+                return Status.ISSUED
+            }
+            Status.WRITTEN_OFF, Status.LOST -> {
+                // Списан/Потерян не участвуют в цикле
+                return item.status
+            }
         }
-        if (next != item.status) dao.updateStatus(item.id, next)
-        return next
     }
 
     suspend fun updateCollectedToRefill(): Int {

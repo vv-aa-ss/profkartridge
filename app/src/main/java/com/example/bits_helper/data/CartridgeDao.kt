@@ -14,6 +14,9 @@ interface CartridgeDao {
     @Query("SELECT * FROM cartridges WHERE number = :number LIMIT 1")
     suspend fun findByNumber(number: String): CartridgeEntity?
 
+    @Query("SELECT * FROM cartridges WHERE number = :number ORDER BY id DESC LIMIT 1")
+    suspend fun findLatestByNumber(number: String): CartridgeEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(items: List<CartridgeEntity>)
 

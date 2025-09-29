@@ -223,7 +223,7 @@ fun HeaderBar(vm: CartridgeViewModel) {
             Spacer(Modifier.width(10.dp))
             ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
             Spacer(Modifier.weight(1f))
-            ClickablePill("Всего: ${counts.values.sum()}", 0xFFFFFFFF, 0xFF0078D4) { vm.setFilter(null) }
+            TotalCountPill(counts.values.sum()) { vm.setFilter(null) }
         }
         Row(
             Modifier.fillMaxWidth(),
@@ -232,6 +232,8 @@ fun HeaderBar(vm: CartridgeViewModel) {
             ClickablePill("Принят: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8) { vm.setFilter(Status.RECEIVED) }
             Spacer(Modifier.width(10.dp))
             ClickablePill("Потерян: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
+            Spacer(Modifier.width(10.dp))
+            ClickablePill("Списан: ${counts[Status.WRITTEN_OFF] ?: 0}", 0xFFF3E8FF, 0xFF8B5CF6) { vm.setFilter(Status.WRITTEN_OFF) }
         }
     }
 }
@@ -384,6 +386,25 @@ fun ClickablePill(text: String, bg: Long, dot: Long, onClick: () -> Unit) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dot)))
         Spacer(Modifier.width(8.dp))
         Text(text, fontSize = 14.sp, color = Color(0xFF0F172A))
+    }
+}
+
+@Composable
+fun TotalCountPill(count: Int, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF0078D4))
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = count.toString(),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
     }
 }
 
