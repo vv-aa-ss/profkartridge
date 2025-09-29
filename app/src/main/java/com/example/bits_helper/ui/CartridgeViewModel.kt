@@ -20,7 +20,8 @@ data class CartridgeUi(
     val model: String,
     val date: String,
     val status: Status,
-    val notes: String?
+    val notes: String?,
+    val department: String?
 )
 
 class CartridgeViewModel(
@@ -84,9 +85,34 @@ class CartridgeViewModel(
             repository.updateCartridge(id, number, room, model, date, status, notes)
         }
     }
+
+    fun getFilteredStatistics(
+        dateFrom: String,
+        dateTo: String,
+        department: String?,
+        status: Status?
+    ): StateFlow<List<CartridgeUi>> {
+        return allCartridges.map { list ->
+            list.filter { item ->
+                var matches = true
+                
+                // Фильтр по датам
+                if (dateFrom.isNotBlank() && item.date < dateFrom) matches = false
+                if (dateTo.isNotBlank() && item.date > dateTo) matches = false
+                
+                // Фильтр по подразделению
+                if (department != null && item.department != department) matches = false
+                
+                // Фильтр по статусу
+                if (status != null && item.status != status) matches = false
+                
+                matches
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
 }
 
 private fun CartridgeEntity.toUi(): CartridgeUi =
-    CartridgeUi(id = id, number = number, room = room, model = model, date = date, status = status, notes = notes)
+    CartridgeUi(id = id, number = number, room = room, model = model, date = date, status = status, notes = notes, department = department)
 
 

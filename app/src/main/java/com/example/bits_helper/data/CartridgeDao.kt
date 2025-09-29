@@ -35,8 +35,8 @@ interface CartridgeDao {
     @Query("DELETE FROM cartridges WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("UPDATE cartridges SET number = :number, room = :room, model = :model, date = :date, status = :status, notes = :notes WHERE id = :id")
-    suspend fun updateCartridge(id: Long, number: String, room: String, model: String, date: String, status: Status, notes: String?)
+    @Query("UPDATE cartridges SET number = :number, room = :room, model = :model, date = :date, status = :status, notes = :notes, department = :department WHERE id = :id")
+    suspend fun updateCartridge(id: Long, number: String, room: String, model: String, date: String, status: Status, notes: String?, department: String?)
 }
 
 

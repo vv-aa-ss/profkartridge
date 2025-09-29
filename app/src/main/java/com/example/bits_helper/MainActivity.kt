@@ -61,6 +61,7 @@ import com.example.bits_helper.ui.CartridgeViewModel
 import com.example.bits_helper.data.exportDatabase
 import com.example.bits_helper.data.importDatabase
 import com.example.bits_helper.data.Status
+import com.example.bits_helper.StatisticsScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -68,7 +69,8 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val repository = CartridgeRepository(AppDatabase.get(applicationContext).cartridgeDao())
+        val database = AppDatabase.get(applicationContext)
+        val repository = CartridgeRepository(database.cartridgeDao(), database.departmentDao())
         setContent {
             val vm: CartridgeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -103,38 +105,47 @@ fun App(vm: CartridgeViewModel) {
         var showEditDialog by remember { mutableStateOf(false) }
         var editingCartridge by remember { mutableStateOf<CartridgeUi?>(null) }
         var showContextMenu by remember { mutableStateOf<Long?>(null) }
+        var showStatistics by remember { mutableStateOf(false) }
         val snackbarHostState = remember { SnackbarHostState() }
-        Scaffold(
-            containerColor = Color(0xFFF5F6F7),
-            topBar = { HeaderBar(vm) },      // закреплённая шапка
-            bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }) },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-        ) { padding ->
-            val items = vm.cartridges.collectAsState(initial = emptyList()).value
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(
-                    start = 16.dp, end = 16.dp,
-                    top = 12.dp, bottom = 96.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(items) { item ->
-                    CartridgeCard(
-                        item,
-                        Modifier.fillMaxWidth(),
-                        onStatusClick = {
-                            changingId = item.id
-                            showSheet = true
-                        },
-                        onLongClick = {
-                            showContextMenu = item.id
-                        }
-                    )
+        val items = vm.cartridges.collectAsState(initial = emptyList()).value
+        if (showStatistics) {
+            StatisticsScreen(
+                vm = vm,
+                onBack = { showStatistics = false }
+            )
+        } else {
+            Scaffold(
+                containerColor = Color(0xFFF5F6F7),
+                topBar = { HeaderBar(vm) },      // закреплённая шапка
+                bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }, onShowStatistics = { showStatistics = true }) },
+                snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+            ) { padding ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(
+                        start = 16.dp, end = 16.dp,
+                        top = 12.dp, bottom = 96.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(items) { item ->
+                        CartridgeCard(
+                            item,
+                            Modifier.fillMaxWidth(),
+                            onStatusClick = {
+                                changingId = item.id
+                                showSheet = true
+                            },
+                            onLongClick = {
+                                showContextMenu = item.id
+                            }
+                        )
+                    }
                 }
             }
+            
             if (showAddDialog) {
                 AddCartridgeDialog(
                     onDismiss = { showAddDialog = false },
@@ -212,7 +223,7 @@ fun HeaderBar(vm: CartridgeViewModel) {
             Spacer(Modifier.width(10.dp))
             ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
             Spacer(Modifier.weight(1f))
-            SummaryPill("Всего: ${counts.values.sum()}")
+            ClickablePill("Всего: ${counts.values.sum()}", 0xFFFFFFFF, 0xFF0078D4) { vm.setFilter(null) }
         }
         Row(
             Modifier.fillMaxWidth(),
@@ -221,8 +232,6 @@ fun HeaderBar(vm: CartridgeViewModel) {
             ClickablePill("Принят: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8) { vm.setFilter(Status.RECEIVED) }
             Spacer(Modifier.width(10.dp))
             ClickablePill("Потерян: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
-            Spacer(Modifier.width(10.dp))
-            ClickablePill("Все", 0xFFE5E7EB, 0xFF6B7280) { vm.setFilter(null) }
         }
     }
 }
@@ -230,7 +239,7 @@ fun HeaderBar(vm: CartridgeViewModel) {
 /* =================== КНОПКИ СНИЗУ =================== */
 
 @Composable
-fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostState: SnackbarHostState, onQrNotFound: (String) -> Unit) {
+fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostState: SnackbarHostState, onQrNotFound: (String) -> Unit, onShowStatistics: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -317,6 +326,13 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
                                 snackbarHostState.showSnackbar(msg)
                             }
                         }
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Статистика") },
+                    onClick = {
+                        menuExpanded = false
+                        onShowStatistics()
                     }
                 )
                 DropdownMenuItem(
@@ -440,6 +456,20 @@ fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClic
             if (!item.notes.isNullOrBlank()) {
                 Spacer(Modifier.height(6.dp))
                 InfoRow("Заметки:", item.notes ?: "")
+            }
+            if (!item.department.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        text = item.department ?: "",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color(0xFF0078D4)
+                    )
+                }
             }
         }
     }
@@ -601,20 +631,18 @@ fun ContextMenuDialog(
             Row {
                 Button(
                     onClick = onEdit,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0078D4))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0078D4)),
+                    contentPadding = PaddingValues(12.dp)
                 ) {
-                    Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Изменить")
+                    Icon(Icons.Rounded.Edit, contentDescription = "Изменить", modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
                     onClick = onDelete,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                    contentPadding = PaddingValues(12.dp)
                 ) {
-                    Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Удалить")
+                    Icon(Icons.Rounded.Delete, contentDescription = "Удалить", modifier = Modifier.size(20.dp))
                 }
             }
         },

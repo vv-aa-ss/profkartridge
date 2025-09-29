@@ -11,7 +11,8 @@ data class CartridgeEntity(
     val model: String,
     val date: String,
     val status: Status = Status.ISSUED,
-    val notes: String? = null
+    val notes: String? = null,
+    val department: String? = null
 )
 
 

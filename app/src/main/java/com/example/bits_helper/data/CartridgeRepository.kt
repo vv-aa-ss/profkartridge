@@ -3,12 +3,14 @@ package com.example.bits_helper.data
 import kotlinx.coroutines.flow.Flow
 
 class CartridgeRepository(
-    private val dao: CartridgeDao
+    private val dao: CartridgeDao,
+    private val departmentDao: DepartmentDao
 ) {
     fun observeCartridges(): Flow<List<CartridgeEntity>> = dao.observeAll()
 
     suspend fun addCartridge(number: String, room: String, model: String, date: String, status: Status, notes: String?) {
-        dao.insertOne(CartridgeEntity(number = number, room = room, model = model, date = date, status = status, notes = notes))
+        val department = departmentDao.findByRoom(room)
+        dao.insertOne(CartridgeEntity(number = number, room = room, model = model, date = date, status = status, notes = notes, department = department))
     }
 
     suspend fun updateStatus(id: Long, status: Status) {
@@ -41,7 +43,8 @@ class CartridgeRepository(
     }
 
     suspend fun updateCartridge(id: Long, number: String, room: String, model: String, date: String, status: Status, notes: String?) {
-        dao.updateCartridge(id, number, room, model, date, status, notes)
+        val department = departmentDao.findByRoom(room)
+        dao.updateCartridge(id, number, room, model, date, status, notes, department)
     }
 }
 
