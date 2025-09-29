@@ -25,6 +25,18 @@ interface CartridgeDao {
 
     @Query("UPDATE cartridges SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: Long, status: Status)
+
+    @Query("UPDATE cartridges SET status = 'IN_REFILL' WHERE status = 'COLLECTED'")
+    suspend fun updateCollectedToRefill(): Int
+
+    @Query("SELECT * FROM cartridges WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): CartridgeEntity?
+
+    @Query("DELETE FROM cartridges WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("UPDATE cartridges SET number = :number, room = :room, model = :model, date = :date, status = :status, notes = :notes WHERE id = :id")
+    suspend fun updateCartridge(id: Long, number: String, room: String, model: String, date: String, status: Status, notes: String?)
 }
 
 

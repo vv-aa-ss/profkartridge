@@ -29,10 +29,16 @@ import androidx.compose.material.icons.rounded.ReportProblem
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.*
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
@@ -94,6 +100,9 @@ fun App(vm: CartridgeViewModel) {
         var changingId by remember { mutableStateOf<Long?>(null) }
         var showSheet by remember { mutableStateOf(false) }
         var addDialogInitialNumber by remember { mutableStateOf("") }
+        var showEditDialog by remember { mutableStateOf(false) }
+        var editingCartridge by remember { mutableStateOf<CartridgeUi?>(null) }
+        var showContextMenu by remember { mutableStateOf<Long?>(null) }
         val snackbarHostState = remember { SnackbarHostState() }
         Scaffold(
             containerColor = Color(0xFFF5F6F7),
@@ -119,6 +128,9 @@ fun App(vm: CartridgeViewModel) {
                         onStatusClick = {
                             changingId = item.id
                             showSheet = true
+                        },
+                        onLongClick = {
+                            showContextMenu = item.id
                         }
                     )
                 }
@@ -143,6 +155,39 @@ fun App(vm: CartridgeViewModel) {
                     })
                 }
             }
+            if (showEditDialog && editingCartridge != null) {
+                EditCartridgeDialog(
+                    cartridge = editingCartridge!!,
+                    onDismiss = { showEditDialog = false; editingCartridge = null },
+                    onSave = { number, room, model, date, status, notes ->
+                        vm.updateCartridge(editingCartridge!!.id, number, room, model, date, status, notes)
+                        showEditDialog = false
+                        editingCartridge = null
+                    }
+                )
+            }
+            if (showContextMenu != null) {
+                val cartridgeId = showContextMenu!!
+                val cartridge = items.find { it.id == cartridgeId }
+                if (cartridge != null) {
+                    ContextMenuDialog(
+                        cartridge = cartridge,
+                        onDismiss = { showContextMenu = null },
+                        onEdit = {
+                            editingCartridge = cartridge
+                            showContextMenu = null
+                            showEditDialog = true
+                        },
+                        onDelete = {
+                            vm.deleteById(cartridgeId)
+                            showContextMenu = null
+                            CoroutineScope(Dispatchers.Main).launch {
+                                snackbarHostState.showSnackbar("Картридж удален")
+                            }
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -163,7 +208,7 @@ fun HeaderBar(vm: CartridgeViewModel) {
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ClickablePill("Роздан: ${counts[Status.ISSUED] ?: 0}", 0xFFE5F8E9, 0xFF16A34A) { vm.setFilter(Status.ISSUED) }
+            ClickablePill("На заправке: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
             Spacer(Modifier.width(10.dp))
             ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
             Spacer(Modifier.weight(1f))
@@ -173,13 +218,11 @@ fun HeaderBar(vm: CartridgeViewModel) {
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ClickablePill("На заправке: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
+            ClickablePill("Принят: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8) { vm.setFilter(Status.RECEIVED) }
             Spacer(Modifier.width(10.dp))
             ClickablePill("Потерян: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            TextButton(onClick = { vm.setFilter(null) }) { Text("Сбросить фильтр") }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(10.dp))
+            ClickablePill("Все", 0xFFE5E7EB, 0xFF6B7280) { vm.setFilter(null) }
         }
     }
 }
@@ -261,6 +304,22 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
+                    text = { Text("Отдать собранные") },
+                    onClick = {
+                        menuExpanded = false
+                        vm.updateCollectedToRefill { updatedCount ->
+                            CoroutineScope(Dispatchers.Main).launch {
+                                val msg = if (updatedCount > 0) {
+                                    "Обновлено картриджей: $updatedCount"
+                                } else {
+                                    "Нет картриджей со статусом 'Собран'"
+                                }
+                                snackbarHostState.showSnackbar(msg)
+                            }
+                        }
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text("Экспорт БД") },
                     onClick = {
                         menuExpanded = false
@@ -339,9 +398,13 @@ fun SummaryPill(text: String) {
 }
 
 @Composable
-fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClick: () -> Unit) {
+fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClick: () -> Unit, onLongClick: () -> Unit) {
     Card(
-        modifier = modifier,
+        modifier = modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onLongPress = { onLongClick() }
+            )
+        },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -431,8 +494,18 @@ fun AddCartridgeDialog(
         title = { Text("Новый картридж", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = number, onValueChange = { number = it }, label = { Text("Номер") })
-                OutlinedTextField(value = room, onValueChange = { room = it }, label = { Text("Кабинет") })
+                OutlinedTextField(
+                    value = number, 
+                    onValueChange = { number = it }, 
+                    label = { Text("Номер") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = room, 
+                    onValueChange = { room = it }, 
+                    label = { Text("Кабинет") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
                 OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Модель") })
                 StatusDropdown(status = status, onChange = { status = it })
                 OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки") })
@@ -513,4 +586,87 @@ fun InfoRow(label: String, value: String) {
     }
 }
 
-// Демоданные больше не нужны, всё приходит из БД через ViewModel
+@Composable
+fun ContextMenuDialog(
+    cartridge: CartridgeUi,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Действия с картриджем", fontWeight = FontWeight.SemiBold) },
+        text = { Text("Номер: ${cartridge.number}\nКабинет: ${cartridge.room}") },
+        confirmButton = {
+            Row {
+                Button(
+                    onClick = onEdit,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0078D4))
+                ) {
+                    Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Изменить")
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                ) {
+                    Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Удалить")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        }
+    )
+}
+
+@Composable
+fun EditCartridgeDialog(
+    cartridge: CartridgeUi,
+    onDismiss: () -> Unit,
+    onSave: (number: String, room: String, model: String, date: String, status: Status, notes: String?) -> Unit
+) {
+    var number by remember { mutableStateOf(cartridge.number) }
+    var room by remember { mutableStateOf(cartridge.room) }
+    var model by remember { mutableStateOf(cartridge.model) }
+    var notes by remember { mutableStateOf(cartridge.notes ?: "") }
+    var status by remember { mutableStateOf(cartridge.status) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(number.trim(), room.trim(), model.trim(), cartridge.date, status, notes.ifBlank { null })
+            }) { Text("Сохранить") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+        title = { Text("Редактировать картридж", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = number, 
+                    onValueChange = { number = it }, 
+                    label = { Text("Номер") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = room, 
+                    onValueChange = { room = it }, 
+                    label = { Text("Кабинет") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Модель") })
+                StatusDropdown(status = status, onChange = { status = it })
+                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки") })
+            }
+        }
+    )
+}
+
+

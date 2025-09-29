@@ -58,6 +58,32 @@ class CartridgeViewModel(
             onResult(next)
         }
     }
+
+    fun updateCollectedToRefill(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val updatedCount = repository.updateCollectedToRefill()
+            onResult(updatedCount)
+        }
+    }
+
+    fun findById(id: Long, onResult: (CartridgeUi?) -> Unit) {
+        viewModelScope.launch {
+            val entity = repository.findById(id)
+            onResult(entity?.toUi())
+        }
+    }
+
+    fun deleteById(id: Long) {
+        viewModelScope.launch {
+            repository.deleteById(id)
+        }
+    }
+
+    fun updateCartridge(id: Long, number: String, room: String, model: String, date: String, status: Status, notes: String?) {
+        viewModelScope.launch {
+            repository.updateCartridge(id, number, room, model, date, status, notes)
+        }
+    }
 }
 
 private fun CartridgeEntity.toUi(): CartridgeUi =

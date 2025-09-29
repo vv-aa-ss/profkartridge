@@ -27,6 +27,22 @@ class CartridgeRepository(
         if (next != item.status) dao.updateStatus(item.id, next)
         return next
     }
+
+    suspend fun updateCollectedToRefill(): Int {
+        return dao.updateCollectedToRefill()
+    }
+
+    suspend fun findById(id: Long): CartridgeEntity? {
+        return dao.findById(id)
+    }
+
+    suspend fun deleteById(id: Long) {
+        dao.deleteById(id)
+    }
+
+    suspend fun updateCartridge(id: Long, number: String, room: String, model: String, date: String, status: Status, notes: String?) {
+        dao.updateCartridge(id, number, room, model, date, status, notes)
+    }
 }
 
 
