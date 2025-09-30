@@ -117,6 +117,7 @@ class CartridgeViewModel(
             onResult(departments)
         }
     }
+
 }
 
 private fun CartridgeEntity.toUi(): CartridgeUi =

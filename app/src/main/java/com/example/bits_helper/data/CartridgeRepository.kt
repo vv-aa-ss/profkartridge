@@ -80,6 +80,7 @@ class CartridgeRepository(
     suspend fun getAllDepartments(): List<String> {
         return departmentDao.getAll().map { it.name }
     }
+
 }
 
 

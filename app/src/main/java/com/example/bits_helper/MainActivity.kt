@@ -218,7 +218,10 @@ fun App(vm: CartridgeViewModel) {
             SyncDialog(
                 onDismiss = { showSyncDialog = false },
                 onSync = { accessToken ->
-                    performSync(context, accessToken, isSyncing, { isSyncing = it }, { showSyncDialog = it }, snackbarHostState)
+                    performSync(context, accessToken, isSyncing, { isSyncing = it }, { showSyncDialog = it }, snackbarHostState) {
+                        // Перезапускаем активность для обновления данных
+                        (context as ComponentActivity).recreate()
+                    }
                 },
                 isSyncing = isSyncing
             )
@@ -300,7 +303,17 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
         }
         val openDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             uri ?: return@rememberLauncherForActivityResult
-            scope.launch { importDatabase(ctx, uri) }
+            scope.launch { 
+                importDatabase(ctx, uri)
+                // Показываем уведомление об успешном импорте
+                withContext(Dispatchers.Main) {
+                    snackbarHostState.showSnackbar("База данных импортирована. Приложение будет перезапущено для обновления данных.")
+                }
+                // Перезапускаем активность для обновления данных
+                withContext(Dispatchers.Main) {
+                    (ctx as ComponentActivity).recreate()
+                }
+            }
         }
         var menuExpanded by remember { mutableStateOf(false) }
 
