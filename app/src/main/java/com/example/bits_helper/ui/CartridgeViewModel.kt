@@ -100,7 +100,7 @@ class CartridgeViewModel(
                 if (dateFrom.isNotBlank() && item.date < dateFrom) matches = false
                 if (dateTo.isNotBlank() && item.date > dateTo) matches = false
                 
-                // Фильтр по подразделению
+                // Фильтр по филиалу
                 if (department != null && item.department != department) matches = false
                 
                 // Фильтр по статусу
@@ -109,6 +109,13 @@ class CartridgeViewModel(
                 matches
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
+
+    fun getAllDepartments(onResult: (List<String>) -> Unit) {
+        viewModelScope.launch {
+            val departments = repository.getAllDepartments()
+            onResult(departments)
+        }
     }
 }
 

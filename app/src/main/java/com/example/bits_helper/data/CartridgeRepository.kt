@@ -76,6 +76,10 @@ class CartridgeRepository(
         val department = departmentDao.findByRoom(room)
         dao.updateCartridge(id, number, room, model, date, status, notes, department)
     }
+
+    suspend fun getAllDepartments(): List<String> {
+        return departmentDao.getAll().map { it.name }
+    }
 }
 
 

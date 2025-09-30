@@ -31,6 +31,10 @@ import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -61,10 +65,15 @@ import com.example.bits_helper.ui.CartridgeViewModel
 import com.example.bits_helper.data.exportDatabase
 import com.example.bits_helper.data.importDatabase
 import com.example.bits_helper.data.Status
+import com.example.bits_helper.data.SyncManager
+import com.example.bits_helper.data.SyncResult
 import com.example.bits_helper.StatisticsScreen
+import com.example.bits_helper.SyncDialog
+import com.example.bits_helper.performSync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -106,6 +115,8 @@ fun App(vm: CartridgeViewModel) {
         var editingCartridge by remember { mutableStateOf<CartridgeUi?>(null) }
         var showContextMenu by remember { mutableStateOf<Long?>(null) }
         var showStatistics by remember { mutableStateOf(false) }
+        var showSyncDialog by remember { mutableStateOf(false) }
+        var isSyncing by remember { mutableStateOf(false) }
         val snackbarHostState = remember { SnackbarHostState() }
         val items = vm.cartridges.collectAsState(initial = emptyList()).value
         if (showStatistics) {
@@ -116,7 +127,7 @@ fun App(vm: CartridgeViewModel) {
         } else {
             Scaffold(
                 containerColor = Color(0xFFF5F6F7),
-                topBar = { HeaderBar(vm) },      // закреплённая шапка
+                topBar = { HeaderBar(vm, onSyncClick = { showSyncDialog = true }) },      // закреплённая шапка
                 bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }, onShowStatistics = { showStatistics = true }) },
                 snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
             ) { padding ->
@@ -200,13 +211,25 @@ fun App(vm: CartridgeViewModel) {
                 }
             }
         }
+        
+        // Диалог синхронизации
+        if (showSyncDialog) {
+            val context = LocalContext.current
+            SyncDialog(
+                onDismiss = { showSyncDialog = false },
+                onSync = { accessToken ->
+                    performSync(context, accessToken, isSyncing, { isSyncing = it }, { showSyncDialog = it }, snackbarHostState)
+                },
+                isSyncing = isSyncing
+            )
+        }
     }
 }
 
 /* =================== HEADER (закреплённый) =================== */
 
 @Composable
-fun HeaderBar(vm: CartridgeViewModel) {
+fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -224,6 +247,21 @@ fun HeaderBar(vm: CartridgeViewModel) {
             ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
             Spacer(Modifier.weight(1f))
             TotalCountPill(counts.values.sum()) { vm.setFilter(null) }
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onSyncClick,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF0078D4))
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Sync,
+                    contentDescription = "Синхронизация",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
         Row(
             Modifier.fillMaxWidth(),
