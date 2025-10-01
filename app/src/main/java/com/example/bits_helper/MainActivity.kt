@@ -3,6 +3,7 @@ package com.example.bits_helper   // ← замени на свой namespace
 import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
+import android.os.Process
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -49,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,10 +72,12 @@ import com.example.bits_helper.data.SyncResult
 import com.example.bits_helper.StatisticsScreen
 import com.example.bits_helper.SyncDialog
 import com.example.bits_helper.performSync
+import com.example.bits_helper.performAutoSync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.GlobalScope
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,17 +88,27 @@ class MainActivity : ComponentActivity() {
             val vm: CartridgeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     @Suppress("UNCHECKED_CAST")
-                    return CartridgeViewModel(repository) as T
+                    return CartridgeViewModel(repository, applicationContext) as T
                 }
             })
-            App(vm)
+            App(vm, this)
         }
+    }
+    
+    /**
+     * Полностью перезапускает приложение
+     */
+    fun restartApp() {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+        Process.killProcess(Process.myPid())
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(vm: CartridgeViewModel) {
+fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
     val fluentColors = lightColorScheme(
         primary = Color(0xFF0078D4),
         onPrimary = Color.White,
@@ -116,6 +130,7 @@ fun App(vm: CartridgeViewModel) {
         var showContextMenu by remember { mutableStateOf<Long?>(null) }
         var showStatistics by remember { mutableStateOf(false) }
         var showSyncDialog by remember { mutableStateOf(false) }
+        var forceSyncDialog by remember { mutableStateOf(false) }
         var isSyncing by remember { mutableStateOf(false) }
         val snackbarHostState = remember { SnackbarHostState() }
         val items = vm.cartridges.collectAsState(initial = emptyList()).value
@@ -127,8 +142,11 @@ fun App(vm: CartridgeViewModel) {
         } else {
             Scaffold(
                 containerColor = Color(0xFFF5F6F7),
-                topBar = { HeaderBar(vm, onSyncClick = { showSyncDialog = true }) },      // закреплённая шапка
-                bottomBar = { BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }, onShowStatistics = { showStatistics = true }) },
+                topBar = { HeaderBar(vm, onSyncClick = { showSyncDialog = true }, onForceSyncClick = { forceSyncDialog = true }) },      // закреплённая шапка
+                bottomBar = { 
+                    val context = LocalContext.current
+                    BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }, onShowStatistics = { showStatistics = true }, onDataRefreshed = { (context as ComponentActivity).recreate() }, activity = activity) 
+                },
                 snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
             ) { padding ->
                 LazyColumn(
@@ -215,12 +233,52 @@ fun App(vm: CartridgeViewModel) {
         // Диалог синхронизации
         if (showSyncDialog) {
             val context = LocalContext.current
+            val syncManager = remember { SyncManager(context) }
+            
+            // Если есть сохраненный токен, предлагаем автоматическую синхронизацию
+            if (syncManager.hasSavedToken()) {
+                val mainActivity = activity as MainActivity
+                LaunchedEffect(Unit) {
+                    performAutoSync(context, isSyncing, { isSyncing = it }, snackbarHostState) {
+                        // Полностью перезапускаем приложение для 100% обновления
+                        GlobalScope.launch {
+                            kotlinx.coroutines.delay(1000) // Даем время на завершение синхронизации
+                            mainActivity.restartApp()
+                        }
+                    }
+                    showSyncDialog = false
+                }
+            } else {
+                SyncDialog(
+                    onDismiss = { showSyncDialog = false },
+                    onSync = { accessToken ->
+                        val mainActivity = activity as MainActivity
+                        performSync(context, accessToken, isSyncing, { isSyncing = it }, { showSyncDialog = it }, snackbarHostState) {
+                            // Полностью перезапускаем приложение для 100% обновления
+                            GlobalScope.launch {
+                                kotlinx.coroutines.delay(1000) // Даем время на завершение синхронизации
+                                mainActivity.restartApp()
+                            }
+                        }
+                    },
+                    isSyncing = isSyncing
+                )
+            }
+        }
+        
+        // Принудительный диалог синхронизации (для смены токена)
+        if (forceSyncDialog) {
+            val context = LocalContext.current
             SyncDialog(
-                onDismiss = { showSyncDialog = false },
+                onDismiss = { forceSyncDialog = false },
                 onSync = { accessToken ->
-                    performSync(context, accessToken, isSyncing, { isSyncing = it }, { showSyncDialog = it }, snackbarHostState) {
-                        // Перезапускаем активность для обновления данных
-                        (context as ComponentActivity).recreate()
+                    val mainActivity = activity as MainActivity
+                    performSync(context, accessToken, isSyncing, { isSyncing = it }, { forceSyncDialog = it }, snackbarHostState) {
+                        // Полностью перезапускаем приложение для 100% обновления
+                        GlobalScope.launch {
+                            kotlinx.coroutines.delay(1000) // Даем время на завершение синхронизации
+                            mainActivity.restartApp()
+                        }
                     }
                 },
                 isSyncing = isSyncing
@@ -232,7 +290,7 @@ fun App(vm: CartridgeViewModel) {
 /* =================== HEADER (закреплённый) =================== */
 
 @Composable
-fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit) {
+fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -251,12 +309,18 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit) {
             Spacer(Modifier.weight(1f))
             TotalCountPill(counts.values.sum()) { vm.setFilter(null) }
             Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = onSyncClick,
+            Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF0078D4))
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { onSyncClick() },
+                            onLongPress = { onForceSyncClick() }
+                        )
+                    },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Sync,
@@ -282,7 +346,7 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit) {
 /* =================== КНОПКИ СНИЗУ =================== */
 
 @Composable
-fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostState: SnackbarHostState, onQrNotFound: (String) -> Unit, onShowStatistics: () -> Unit) {
+fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostState: SnackbarHostState, onQrNotFound: (String) -> Unit, onShowStatistics: () -> Unit, onDataRefreshed: () -> Unit, activity: ComponentActivity) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -303,15 +367,19 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
         }
         val openDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             uri ?: return@rememberLauncherForActivityResult
+            val mainActivity = activity as MainActivity
             scope.launch { 
                 importDatabase(ctx, uri)
                 // Показываем уведомление об успешном импорте
                 withContext(Dispatchers.Main) {
                     snackbarHostState.showSnackbar("База данных импортирована. Приложение будет перезапущено для обновления данных.")
                 }
-                // Перезапускаем активность для обновления данных
+                // Полностью перезапускаем приложение для 100% обновления
                 withContext(Dispatchers.Main) {
-                    (ctx as ComponentActivity).recreate()
+                    GlobalScope.launch {
+                        kotlinx.coroutines.delay(1000) // Даем время на завершение импорта
+                        mainActivity.restartApp()
+                    }
                 }
             }
         }

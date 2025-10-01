@@ -5,12 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.example.bits_helper.data.CartridgeRepository
 import com.example.bits_helper.data.CartridgeEntity
 import com.example.bits_helper.data.Status
+import com.example.bits_helper.data.AppDatabase
+import android.content.Context
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 data class CartridgeUi(
@@ -25,13 +28,20 @@ data class CartridgeUi(
 )
 
 class CartridgeViewModel(
-    private val repository: CartridgeRepository
+    private val repository: CartridgeRepository,
+    private val context: Context
 ) : ViewModel() {
 
-    private val allCartridges: StateFlow<List<CartridgeUi>> = repository
-        .observeCartridges()
-        .map { list -> list.map { it.toUi() } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val refreshTrigger = MutableStateFlow(0)
+    private val forceRefreshTrigger = MutableStateFlow(0)
+    
+    private val allCartridges: StateFlow<List<CartridgeUi>> = combine(
+        repository.observeCartridges(),
+        refreshTrigger,
+        forceRefreshTrigger
+    ) { list, _, _ -> 
+        list.map { it.toUi() } 
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val selectedStatus = MutableStateFlow<Status?>(null)
 
@@ -115,6 +125,46 @@ class CartridgeViewModel(
         viewModelScope.launch {
             val departments = repository.getAllDepartments()
             onResult(departments)
+        }
+    }
+    
+    /**
+     * Принудительно обновляет данные из базы
+     */
+    fun refreshData() {
+        refreshTrigger.value++
+    }
+    
+    /**
+     * Принудительно перезагружает все данные из базы
+     * Используется после синхронизации или импорта
+     */
+    fun forceRefreshData() {
+        viewModelScope.launch {
+            // Принудительно обновляем оба триггера
+            forceRefreshTrigger.value++
+            kotlinx.coroutines.delay(50) // Небольшая задержка
+            refreshTrigger.value++
+            kotlinx.coroutines.delay(50) // Еще одна задержка
+            forceRefreshTrigger.value++
+        }
+    }
+    
+    /**
+     * Принудительно пересоздает подключение к базе данных
+     * Используется после синхронизации или импорта для полного обновления
+     */
+    fun forceReconnectDatabase() {
+        viewModelScope.launch {
+            // Принудительно пересоздаем подключение к базе данных
+            AppDatabase.forceReconnect(context)
+            
+            // Обновляем триггеры для принудительного обновления UI
+            forceRefreshTrigger.value++
+            kotlinx.coroutines.delay(200) // Даем больше времени на переподключение
+            refreshTrigger.value++
+            kotlinx.coroutines.delay(100) // Еще одна задержка для гарантии
+            forceRefreshTrigger.value++
         }
     }
 

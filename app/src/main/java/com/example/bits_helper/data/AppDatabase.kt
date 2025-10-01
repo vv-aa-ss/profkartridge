@@ -28,6 +28,19 @@ abstract class AppDatabase : RoomDatabase() {
         fun get(context: Context): AppDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: build(context).also { INSTANCE = it }
         }
+        
+        /**
+         * Принудительно пересоздает подключение к базе данных
+         * Используется после синхронизации или импорта
+         */
+        fun forceReconnect(context: Context): AppDatabase = synchronized(this) {
+            // Закрываем текущее подключение
+            INSTANCE?.close()
+            INSTANCE = null
+            
+            // Создаем новое подключение
+            build(context).also { INSTANCE = it }
+        }
 
 
         private fun build(context: Context): AppDatabase {
