@@ -8,6 +8,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.offset
+import kotlin.math.abs
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import androidx.compose.material.icons.Icons
@@ -494,41 +509,150 @@ fun StatisticsFiltersDialog(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatePickerDialog(
     initialDate: LocalDate,
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialDate.atStartOfDay().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-    )
+    var selectedDay by remember { mutableStateOf(initialDate.dayOfMonth) }
+    var selectedMonth by remember { mutableStateOf(initialDate.monthValue) }
+    var selectedYear by remember { mutableStateOf(initialDate.year) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Выберите дату", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                DatePicker(
-                    state = datePickerState,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // Анимированный выбор даты
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // День
+                    AnimatedDateWheel(
+                        label = "День",
+                        items = (1..31).toList(),
+                        selectedValue = selectedDay,
+                        onValueChanged = { selectedDay = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    // Месяц
+                    AnimatedDateWheel(
+                        label = "Месяц",
+                        items = (1..12).toList(),
+                        selectedValue = selectedMonth,
+                        onValueChanged = { selectedMonth = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    // Год
+                    AnimatedDateWheel(
+                        label = "Год",
+                        items = (2020..2030).toList(),
+                        selectedValue = selectedYear,
+                        onValueChanged = { selectedYear = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                
+                // Быстрый выбор дат
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Быстрый выбор:",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF374151)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val today = LocalDate.now()
+                                    selectedDay = today.dayOfMonth
+                                    selectedMonth = today.monthValue
+                                    selectedYear = today.year
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0078D4)),
+                                contentPadding = PaddingValues(8.dp)
+                            ) {
+                                Text("Сегодня", fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    val yesterday = LocalDate.now().minusDays(1)
+                                    selectedDay = yesterday.dayOfMonth
+                                    selectedMonth = yesterday.monthValue
+                                    selectedYear = yesterday.year
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                                contentPadding = PaddingValues(8.dp)
+                            ) {
+                                Text("Вчера", fontSize = 12.sp)
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val weekAgo = LocalDate.now().minusWeeks(1)
+                                    selectedDay = weekAgo.dayOfMonth
+                                    selectedMonth = weekAgo.monthValue
+                                    selectedYear = weekAgo.year
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                                contentPadding = PaddingValues(8.dp)
+                            ) {
+                                Text("Неделю назад", fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    val monthAgo = LocalDate.now().minusMonths(1)
+                                    selectedDay = monthAgo.dayOfMonth
+                                    selectedMonth = monthAgo.monthValue
+                                    selectedYear = monthAgo.year
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                                contentPadding = PaddingValues(8.dp)
+                            ) {
+                                Text("Месяц назад", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { 
-                datePickerState.selectedDateMillis?.let { millis ->
-                    val selectedDate = java.time.Instant.ofEpochMilli(millis)
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .toLocalDate()
-                    onDateSelected(selectedDate)
+            TextButton(
+                onClick = { 
+                    try {
+                        val selectedDate = LocalDate.of(selectedYear, selectedMonth, selectedDay)
+                        onDateSelected(selectedDate)
+                    } catch (e: Exception) {
+                        // Обработка ошибок валидации даты
+                    }
                 }
-            }) { 
+            ) { 
                 Text("Выбрать") 
             }
         },
@@ -540,6 +664,141 @@ fun DatePickerDialog(
     )
 }
 
-
-
+@Composable
+fun AnimatedDateWheel(
+    label: String,
+    items: List<Int>,
+    selectedValue: Int,
+    onValueChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    var offset by remember { mutableStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    val itemHeight = 50.dp
+    val visibleItems = 3
+    val centerIndex = visibleItems / 2
+    
+    // Вычисляем начальное смещение для выбранного элемента
+    val initialOffset = remember(selectedValue) {
+        val selectedIndex = items.indexOf(selectedValue)
+        if (selectedIndex != -1) {
+            -(selectedIndex - centerIndex) * with(density) { itemHeight.toPx() }
+        } else 0f
+    }
+    
+    // Обновляем offset при изменении selectedValue
+    LaunchedEffect(selectedValue) {
+        val selectedIndex = items.indexOf(selectedValue)
+        if (selectedIndex != -1) {
+            val targetOffset = -(selectedIndex - centerIndex) * with(density) { itemHeight.toPx() }
+            offset = targetOffset
+        }
+    }
+    
+    // Анимируем к ближайшему элементу при отпускании
+    LaunchedEffect(isDragging) {
+        if (!isDragging) {
+            val newIndex = (-offset / with(density) { itemHeight.toPx() } + centerIndex).toInt()
+            val clampedIndex = newIndex.coerceIn(0, items.size - 1)
+            val targetOffset = -(clampedIndex - centerIndex) * with(density) { itemHeight.toPx() }
+            
+            // Плавная анимация к целевому элементу
+            offset = targetOffset
+            
+            if (items[clampedIndex] != selectedValue) {
+                onValueChanged(items[clampedIndex])
+            }
+        }
+    }
+    
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = Color(0xFF6B7280),
+            fontWeight = FontWeight.Medium
+        )
+        
+        Spacer(Modifier.height(8.dp))
+        
+        Box(
+            modifier = Modifier
+                .height(itemHeight * visibleItems)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFFF3F4F6))
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { isDragging = true },
+                        onDragEnd = { isDragging = false }
+                    ) { _, dragAmount ->
+                        offset += dragAmount.y
+                    }
+                }
+        ) {
+            // Рендерим элементы
+            items.forEachIndexed { index, item ->
+                val itemOffset = index * with(density) { itemHeight.toPx() } + offset
+                val centerY = with(density) { (itemHeight * centerIndex).toPx() }
+                val distanceFromCenter = kotlin.math.abs(itemOffset - centerY)
+                val maxDistance = with(density) { itemHeight.toPx() }
+                
+                // Вычисляем прозрачность и масштаб на основе расстояния от центра
+                val alpha = (1f - (distanceFromCenter / maxDistance)).coerceIn(0.3f, 1f)
+                val scale = (1f - (distanceFromCenter / maxDistance) * 0.3f).coerceIn(0.7f, 1f)
+                
+                // Анимация для плавного перехода
+                val animatedAlpha by animateFloatAsState(
+                    targetValue = alpha,
+                    animationSpec = tween(150),
+                    label = "alpha"
+                )
+                val animatedScale by animateFloatAsState(
+                    targetValue = scale,
+                    animationSpec = tween(150),
+                    label = "scale"
+                )
+                
+                // Определяем, является ли элемент центральным
+                val isCenter = distanceFromCenter < with(density) { itemHeight.toPx() / 2 }
+                
+                Box(
+                    modifier = Modifier
+                        .offset(y = with(density) { itemOffset.toDp() })
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .alpha(animatedAlpha)
+                        .scale(animatedScale)
+                        .clickable { 
+                            // Клик по элементу - переходим к нему
+                            val targetOffset = -(index - centerIndex) * with(density) { itemHeight.toPx() }
+                            offset = targetOffset
+                            onValueChanged(item)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = item.toString().padStart(2, '0'),
+                        fontSize = if (isCenter) 18.sp else 16.sp,
+                        fontWeight = if (isCenter) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isCenter) Color(0xFF1F2937) else Color(0xFF6B7280)
+                    )
+                }
+            }
+            
+            // Центральная линия выделения
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .offset(y = itemHeight * centerIndex)
+                    .background(Color(0xFF0078D4))
+            )
+        }
+    }
+}
 
