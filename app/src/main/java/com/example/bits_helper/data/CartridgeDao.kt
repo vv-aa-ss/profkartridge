@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CartridgeDao {
-    @Query("SELECT * FROM cartridges ORDER BY id ASC")
+    @Query("SELECT * FROM cartridges ORDER BY id DESC")
     fun observeAll(): Flow<List<CartridgeEntity>>
 
     @Query("SELECT * FROM cartridges WHERE number = :number LIMIT 1")

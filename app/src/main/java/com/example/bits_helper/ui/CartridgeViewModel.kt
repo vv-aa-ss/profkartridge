@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.bits_helper.data.CartridgeRepository
 import com.example.bits_helper.data.CartridgeEntity
 import com.example.bits_helper.data.Status
+import com.example.bits_helper.data.StatusUpdateResult
 import com.example.bits_helper.data.AppDatabase
 import android.content.Context
 import kotlinx.coroutines.flow.SharingStarted
@@ -63,10 +64,10 @@ class CartridgeViewModel(
         viewModelScope.launch { repository.updateStatus(id, status) }
     }
 
-    fun progressByNumber(number: String, onResult: (Status?) -> Unit) {
+    fun progressByNumber(number: String, onResult: (StatusUpdateResult?) -> Unit) {
         viewModelScope.launch {
-            val next = repository.progressStatusByNumber(number)
-            onResult(next)
+            val result = repository.progressStatusByNumber(number)
+            onResult(result)
         }
     }
 

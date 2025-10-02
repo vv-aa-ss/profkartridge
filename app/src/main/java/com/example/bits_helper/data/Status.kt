@@ -9,4 +9,15 @@ enum class Status {
     WRITTEN_OFF   // списан (розовый)
 }
 
+fun Status.getRussianName(): String {
+    return when (this) {
+        Status.ISSUED -> "Роздан"
+        Status.IN_REFILL -> "На заправке"
+        Status.COLLECTED -> "Собран"
+        Status.RECEIVED -> "Принят"
+        Status.LOST -> "Потерян"
+        Status.WRITTEN_OFF -> "Списан"
+    }
+}
+
 

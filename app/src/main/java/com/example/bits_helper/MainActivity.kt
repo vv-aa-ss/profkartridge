@@ -67,6 +67,7 @@ import com.example.bits_helper.ui.CartridgeViewModel
 import com.example.bits_helper.data.exportDatabase
 import com.example.bits_helper.data.importDatabase
 import com.example.bits_helper.data.Status
+import com.example.bits_helper.data.getRussianName
 import com.example.bits_helper.data.SyncManager
 import com.example.bits_helper.data.SyncResult
 import com.example.bits_helper.StatisticsScreen
@@ -400,10 +401,10 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
         val scannerLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
             val value = result.data?.getStringExtra("qr_value")?.trim()
             if (!value.isNullOrEmpty()) {
-                vm.progressByNumber(value) { next ->
+                vm.progressByNumber(value) { result ->
                     CoroutineScope(Dispatchers.Main).launch {
-                        if (next != null) {
-                            val msg = "Статус обновлён: $next"
+                        if (result != null) {
+                            val msg = "Картридж ${result.number} изменён на \"${result.newStatus.getRussianName()}\""
                             snackbarHostState.showSnackbar(msg)
                         } else {
                             // Картридж не найден - открываем форму добавления с предзаполненным номером

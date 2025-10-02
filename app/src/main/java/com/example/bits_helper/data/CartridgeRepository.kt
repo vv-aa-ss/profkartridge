@@ -2,6 +2,11 @@ package com.example.bits_helper.data
 
 import kotlinx.coroutines.flow.Flow
 
+data class StatusUpdateResult(
+    val number: String,
+    val newStatus: Status
+)
+
 class CartridgeRepository(
     private val dao: CartridgeDao,
     private val departmentDao: DepartmentDao
@@ -17,7 +22,7 @@ class CartridgeRepository(
         dao.updateStatus(id, status)
     }
 
-    suspend fun progressStatusByNumber(number: String) : Status? {
+    suspend fun progressStatusByNumber(number: String) : StatusUpdateResult? {
         // Ищем последнюю запись этого картриджа
         val item = dao.findLatestByNumber(number) ?: return null
         
@@ -36,26 +41,26 @@ class CartridgeRepository(
                     department = department
                 )
                 dao.insertOne(newItem)
-                return Status.COLLECTED
+                return StatusUpdateResult(item.number, Status.COLLECTED)
             }
             Status.COLLECTED -> {
                 // Собран -> На заправке
                 dao.updateStatus(item.id, Status.IN_REFILL)
-                return Status.IN_REFILL
+                return StatusUpdateResult(item.number, Status.IN_REFILL)
             }
             Status.IN_REFILL -> {
                 // На заправке -> Принят
                 dao.updateStatus(item.id, Status.RECEIVED)
-                return Status.RECEIVED
+                return StatusUpdateResult(item.number, Status.RECEIVED)
             }
             Status.RECEIVED -> {
                 // Принят -> Роздан
                 dao.updateStatus(item.id, Status.ISSUED)
-                return Status.ISSUED
+                return StatusUpdateResult(item.number, Status.ISSUED)
             }
             Status.WRITTEN_OFF, Status.LOST -> {
                 // Списан/Потерян не участвуют в цикле
-                return item.status
+                return StatusUpdateResult(item.number, item.status)
             }
         }
     }
