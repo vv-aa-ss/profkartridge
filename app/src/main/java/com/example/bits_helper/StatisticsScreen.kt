@@ -355,7 +355,7 @@ fun StatisticsFiltersDialog(
         title = { Text("Фильтры статистики", fontWeight = FontWeight.SemiBold) },
         containerColor = MaterialTheme.colorScheme.surface,
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Выбор даты "от"
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -363,7 +363,7 @@ fun StatisticsFiltersDialog(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(12.dp)
                     ) {
                         Text(
                             text = "Дата от",
@@ -371,7 +371,7 @@ fun StatisticsFiltersDialog(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         OutlinedButton(
                             onClick = { showDateFromPicker = true },
                             modifier = Modifier.fillMaxWidth(),
@@ -389,7 +389,7 @@ fun StatisticsFiltersDialog(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(12.dp)
                     ) {
                         Text(
                             text = "Дата до",
@@ -397,7 +397,7 @@ fun StatisticsFiltersDialog(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         OutlinedButton(
                             onClick = { showDateToPicker = true },
                             modifier = Modifier.fillMaxWidth(),
