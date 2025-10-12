@@ -102,7 +102,9 @@ class CartridgeViewModel(
         dateFrom: String,
         dateTo: String,
         department: String?,
-        status: Status?
+        status: Status?,
+        roomNumber: String? = null,
+        cartridgeNumber: String? = null
     ): StateFlow<List<CartridgeUi>> {
         return allCartridges.map { list ->
             list.filter { item ->
@@ -117,6 +119,14 @@ class CartridgeViewModel(
                 
                 // Фильтр по статусу
                 if (status != null && item.status != status) matches = false
+                
+                // Фильтр по номеру кабинета
+                if (roomNumber != null && roomNumber.isNotBlank() && 
+                    !item.room.contains(roomNumber, ignoreCase = true)) matches = false
+                
+                // Фильтр по номеру картриджа
+                if (cartridgeNumber != null && cartridgeNumber.isNotBlank() && 
+                    !item.number.contains(cartridgeNumber, ignoreCase = true)) matches = false
                 
                 matches
             }

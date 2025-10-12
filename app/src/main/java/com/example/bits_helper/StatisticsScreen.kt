@@ -66,6 +66,8 @@ fun StatisticsScreen(
     var dateTo by remember { mutableStateOf(today.format(formatter)) }
     var selectedDepartment by remember { mutableStateOf<String?>(null) }
     var selectedStatus by remember { mutableStateOf<Status?>(null) }
+    var roomNumberFilter by remember { mutableStateOf("") }
+    var cartridgeNumberFilter by remember { mutableStateOf("") }
     
     // Список филиалов из базы данных
     var departments by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -82,7 +84,9 @@ fun StatisticsScreen(
         dateFrom = LocalDate.parse(dateFrom, formatter).format(internalFormatter),
         dateTo = LocalDate.parse(dateTo, formatter).format(internalFormatter),
         department = selectedDepartment,
-        status = selectedStatus
+        status = selectedStatus,
+        roomNumber = roomNumberFilter.takeIf { it.isNotBlank() },
+        cartridgeNumber = cartridgeNumberFilter.takeIf { it.isNotBlank() }
     ).collectAsState(initial = emptyList()).value
     
     // Обработчик системной кнопки "Назад"
@@ -219,12 +223,16 @@ fun StatisticsScreen(
                 dateTo = dateTo,
                 selectedDepartment = selectedDepartment,
                 selectedStatus = selectedStatus,
+                roomNumberFilter = roomNumberFilter,
+                cartridgeNumberFilter = cartridgeNumberFilter,
                 departments = departments,
                 formatter = formatter,
                 onDateFromChange = { dateFrom = it },
                 onDateToChange = { dateTo = it },
                 onDepartmentChange = { selectedDepartment = it },
                 onStatusChange = { selectedStatus = it },
+                onRoomNumberChange = { roomNumberFilter = it },
+                onCartridgeNumberChange = { cartridgeNumberFilter = it },
                 onDismiss = { showFilters = false }
             )
         }
@@ -327,12 +335,16 @@ fun StatisticsFiltersDialog(
     dateTo: String,
     selectedDepartment: String?,
     selectedStatus: Status?,
+    roomNumberFilter: String,
+    cartridgeNumberFilter: String,
     departments: List<String>,
     formatter: DateTimeFormatter,
     onDateFromChange: (String) -> Unit,
     onDateToChange: (String) -> Unit,
     onDepartmentChange: (String?) -> Unit,
     onStatusChange: (Status?) -> Unit,
+    onRoomNumberChange: (String) -> Unit,
+    onCartridgeNumberChange: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var showDateFromPicker by remember { mutableStateOf(false) }
@@ -343,7 +355,7 @@ fun StatisticsFiltersDialog(
         title = { Text("Фильтры статистики", fontWeight = FontWeight.SemiBold) },
         containerColor = MaterialTheme.colorScheme.surface,
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Выбор даты "от"
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -473,6 +485,60 @@ fun StatisticsFiltersDialog(
                                 onClick = { onStatusChange(status); statusExpanded = false }
                             )
                         }
+                    }
+                }
+                
+                // Фильтр по номеру кабинета
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = "Номер кабинета",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = roomNumberFilter,
+                            onValueChange = onRoomNumberChange,
+                            placeholder = { Text("Все", fontSize = 14.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                        )
+                    }
+                }
+                
+                // Фильтр по номеру картриджа
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = "Номер картриджа",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = cartridgeNumberFilter,
+                            onValueChange = onCartridgeNumberChange,
+                            placeholder = { Text("Все", fontSize = 14.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                        )
                     }
                 }
             }
