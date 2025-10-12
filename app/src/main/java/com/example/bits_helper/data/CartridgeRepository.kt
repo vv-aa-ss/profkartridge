@@ -4,7 +4,10 @@ import kotlinx.coroutines.flow.Flow
 
 data class StatusUpdateResult(
     val number: String,
-    val newStatus: Status
+    val newStatus: Status,
+    val room: String,
+    val model: String,
+    val department: String?
 )
 
 class CartridgeRepository(
@@ -41,26 +44,30 @@ class CartridgeRepository(
                     department = department
                 )
                 dao.insertOne(newItem)
-                return StatusUpdateResult(item.number, Status.COLLECTED)
+                return StatusUpdateResult(item.number, Status.COLLECTED, item.room, item.model, department)
             }
             Status.COLLECTED -> {
                 // Собран -> На заправке
                 dao.updateStatus(item.id, Status.IN_REFILL)
-                return StatusUpdateResult(item.number, Status.IN_REFILL)
+                val department = departmentDao.findByRoom(item.room)
+                return StatusUpdateResult(item.number, Status.IN_REFILL, item.room, item.model, department)
             }
             Status.IN_REFILL -> {
                 // На заправке -> Принят
                 dao.updateStatus(item.id, Status.RECEIVED)
-                return StatusUpdateResult(item.number, Status.RECEIVED)
+                val department = departmentDao.findByRoom(item.room)
+                return StatusUpdateResult(item.number, Status.RECEIVED, item.room, item.model, department)
             }
             Status.RECEIVED -> {
                 // Принят -> Роздан
                 dao.updateStatus(item.id, Status.ISSUED)
-                return StatusUpdateResult(item.number, Status.ISSUED)
+                val department = departmentDao.findByRoom(item.room)
+                return StatusUpdateResult(item.number, Status.ISSUED, item.room, item.model, department)
             }
             Status.WRITTEN_OFF, Status.LOST -> {
                 // Списан/Потерян не участвуют в цикле
-                return StatusUpdateResult(item.number, item.status)
+                val department = departmentDao.findByRoom(item.room)
+                return StatusUpdateResult(item.number, item.status, item.room, item.model, department)
             }
         }
     }
@@ -84,6 +91,59 @@ class CartridgeRepository(
 
     suspend fun getAllDepartments(): List<String> {
         return departmentDao.getAll().map { it.name }
+    }
+
+    suspend fun getAllDepartmentEntities(): List<DepartmentEntity> {
+        return departmentDao.getAll()
+    }
+
+    suspend fun addDepartment(name: String, rooms: String) {
+        departmentDao.insertOne(DepartmentEntity(name, rooms))
+    }
+
+    suspend fun updateDepartment(name: String, rooms: String) {
+        departmentDao.updateRooms(name, rooms)
+    }
+
+    suspend fun deleteDepartment(name: String) {
+        departmentDao.deleteByName(name)
+    }
+
+    suspend fun getDepartmentCount(): Int {
+        return departmentDao.getCount()
+    }
+
+    suspend fun getCartridgeCount(): Int {
+        return dao.getCartridgeCount()
+    }
+
+    suspend fun clearAllCartridges() {
+        dao.clear()
+    }
+
+    /**
+     * Обновляет подразделения для всех картриджей, у которых department = NULL
+     */
+    suspend fun updateMissingDepartments(): Int {
+        val departments = departmentDao.getAll()
+        val countBefore = dao.countCartridgesWithoutDepartment()
+        
+        for (dept in departments) {
+            val rooms = dept.rooms.split(",").map { it.trim() }
+            for (room in rooms) {
+                dao.updateDepartmentByRoom(room, dept.name)
+            }
+        }
+        
+        val countAfter = dao.countCartridgesWithoutDepartment()
+        return countBefore - countAfter
+    }
+
+    /**
+     * Возвращает количество картриджей без подразделения
+     */
+    suspend fun getCartridgesWithoutDepartmentCount(): Int {
+        return dao.countCartridgesWithoutDepartment()
     }
 
 }

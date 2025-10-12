@@ -40,6 +40,15 @@ interface CartridgeDao {
 
     @Query("UPDATE cartridges SET number = :number, room = :room, model = :model, date = :date, status = :status, notes = :notes, department = :department WHERE id = :id")
     suspend fun updateCartridge(id: Long, number: String, room: String, model: String, date: String, status: Status, notes: String?, department: String?)
+
+    @Query("UPDATE cartridges SET department = :department WHERE room = :room AND department IS NULL")
+    suspend fun updateDepartmentByRoom(room: String, department: String?)
+
+    @Query("SELECT COUNT(*) FROM cartridges WHERE department IS NULL")
+    suspend fun countCartridgesWithoutDepartment(): Int
+
+    @Query("SELECT COUNT(*) FROM cartridges")
+    suspend fun getCartridgeCount(): Int
 }
 
 

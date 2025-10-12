@@ -1,6 +1,7 @@
 package com.example.bits_helper
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudSync
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import com.example.bits_helper.data.YandexDiskDiagnostics
 import com.example.bits_helper.data.DiagnosticResult
@@ -36,14 +38,19 @@ fun SyncDialog(
     var showDiagnostics by remember { mutableStateOf(false) }
     var diagnosticResults by remember { mutableStateOf<List<DiagnosticResult>>(emptyList()) }
     var isDiagnosing by remember { mutableStateOf(false) }
-    var saveToken by remember { mutableStateOf(false) }
+    var dailyUploadEnabled by remember { mutableStateOf(false) }
+    var dailyDownloadEnabled by remember { mutableStateOf(false) }
     
-    // Загружаем сохраненный токен при инициализации
+    // Загружаем сохраненный токен и настройки при инициализации
     LaunchedEffect(Unit) {
         val savedToken = syncManager.getSavedAccessToken()
         if (savedToken != null) {
             accessToken = savedToken
         }
+        
+        // Загружаем настройки ежедневной выгрузки и загрузки
+        dailyUploadEnabled = syncManager.isDailyUploadEnabled()
+        dailyDownloadEnabled = syncManager.isDailyDownloadEnabled()
     }
     
     AlertDialog(
@@ -61,6 +68,7 @@ fun SyncDialog(
                 Text("Синхронизация с Яндекс.Диском", fontWeight = FontWeight.SemiBold)
             }
         },
+        containerColor = MaterialTheme.colorScheme.surface,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Введите токен доступа к Яндекс.Диску для синхронизации базы данных между устройствами.")
@@ -74,21 +82,6 @@ fun SyncDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                // Чекбокс для сохранения токена
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Checkbox(
-                        checked = saveToken,
-                        onCheckedChange = { saveToken = it }
-                    )
-                    Text(
-                        text = "Сохранить токен для повторного использования",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                
                 // Кнопка очистки сохраненного токена
                 if (syncManager.hasSavedToken()) {
                     Row(
@@ -99,7 +92,7 @@ fun SyncDialog(
                             imageVector = Icons.Rounded.Delete,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = Color(0xFFF44336)
+                            tint = MaterialTheme.colorScheme.error
                         )
                         TextButton(
                             onClick = {
@@ -110,6 +103,80 @@ fun SyncDialog(
                         ) {
                             Text("Очистить сохраненный токен")
                         }
+                    }
+                }
+                
+                Spacer(Modifier.height(16.dp))
+                
+                // Настройки автоматической выгрузки
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "📤 Автоматическая выгрузка базы данных",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        
+                        // Ежедневная выгрузка
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(
+                                checked = dailyUploadEnabled,
+                                onCheckedChange = { dailyUploadEnabled = it }
+                            )
+                            Text(
+                                text = "Ежедневная выгрузка при запуске",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        
+                    }
+                }
+                
+                // Ежедневная загрузка
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "📥 Автоматическая загрузка базы данных",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        
+                        // Ежедневная загрузка
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(
+                                checked = dailyDownloadEnabled,
+                                onCheckedChange = { dailyDownloadEnabled = it }
+                            )
+                            Text(
+                                text = "Ежедневная загрузка при запуске",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        
                     }
                 }
                 
@@ -150,9 +217,9 @@ fun SyncDialog(
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                     tint = when (result) {
-                                        is DiagnosticResult.Success -> Color(0xFF4CAF50)
-                                        is DiagnosticResult.Warning -> Color(0xFFFF9800)
-                                        is DiagnosticResult.Error -> Color(0xFFF44336)
+                                        is DiagnosticResult.Success -> MaterialTheme.colorScheme.primary
+                                        is DiagnosticResult.Warning -> MaterialTheme.colorScheme.tertiary
+                                        is DiagnosticResult.Error -> MaterialTheme.colorScheme.error
                                     }
                                 )
                                 Text(
@@ -188,9 +255,13 @@ fun SyncDialog(
                 }
                 TextButton(
                     onClick = { 
-                        if (saveToken) {
-                            syncManager.saveAccessToken(accessToken.trim())
-                        }
+                        // Всегда сохраняем токен
+                        syncManager.saveAccessToken(accessToken.trim())
+                        
+                        // Сохраняем настройки ежедневной выгрузки и загрузки
+                        syncManager.setDailyUploadEnabled(dailyUploadEnabled)
+                        syncManager.setDailyDownloadEnabled(dailyDownloadEnabled)
+                        
                         onSync(accessToken.trim()) 
                     },
                     enabled = accessToken.isNotBlank() && !isSyncing && !isDiagnosing

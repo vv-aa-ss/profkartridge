@@ -25,6 +25,11 @@ class SyncManager(private val context: Context) {
         private const val KEY_LOCAL_VERSION = "local_version"
         private const val KEY_REMOTE_VERSION = "remote_version"
         private const val KEY_ACCESS_TOKEN = "access_token"
+        private const val KEY_AUTO_UPLOAD_ENABLED = "auto_upload_enabled"
+        private const val KEY_DAILY_UPLOAD_ENABLED = "daily_upload_enabled"
+        private const val KEY_LAST_UPLOAD_DATE = "last_upload_date"
+        private const val KEY_DAILY_DOWNLOAD_ENABLED = "daily_download_enabled"
+        private const val KEY_LAST_DOWNLOAD_DATE = "last_download_date"
     }
     
     /**
@@ -279,6 +284,262 @@ class SyncManager(private val context: Context) {
      */
     fun hasSavedToken(): Boolean {
         return getSavedAccessToken() != null
+    }
+
+    /**
+     * Полностью очищает все настройки синхронизации и удаляет файлы базы данных
+     */
+    fun clearAllSyncData() {
+        // Очищаем SharedPreferences
+        prefs.edit().clear().apply()
+        
+        // Удаляем файлы базы данных
+        try {
+            val localDbFile = context.getDatabasePath("bits_helper.db")
+            val walFile = File(localDbFile.parent, "${localDbFile.name}-wal")
+            val shmFile = File(localDbFile.parent, "${localDbFile.name}-shm")
+            
+            // Закрываем подключение к базе данных
+            try {
+                val database = AppDatabase.get(context)
+                database.close()
+            } catch (e: Exception) {
+                // Игнорируем ошибки закрытия
+            }
+            
+            // Удаляем файлы базы данных
+            localDbFile.delete()
+            walFile.delete()
+            shmFile.delete()
+            
+            // Удаляем резервные копии
+            val backupDir = localDbFile.parent
+            if (backupDir != null) {
+                val backupFiles = File(backupDir).listFiles { file ->
+                    file.name.startsWith("bits_helper_backup_") && file.name.endsWith(".db")
+                }
+                backupFiles?.forEach { it.delete() }
+            }
+        } catch (e: Exception) {
+            // Логируем ошибку, но не прерываем выполнение
+            android.util.Log.e("SyncManager", "Ошибка при удалении файлов базы данных", e)
+        }
+    }
+    
+    /**
+     * Включает/выключает автоматическую выгрузку
+     */
+    fun setAutoUploadEnabled(enabled: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_AUTO_UPLOAD_ENABLED, enabled)
+            .apply()
+    }
+    
+    /**
+     * Проверяет, включена ли автоматическая выгрузка
+     */
+    fun isAutoUploadEnabled(): Boolean {
+        return prefs.getBoolean(KEY_AUTO_UPLOAD_ENABLED, false)
+    }
+    
+    /**
+     * Включает/выключает ежедневную выгрузку
+     */
+    fun setDailyUploadEnabled(enabled: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_DAILY_UPLOAD_ENABLED, enabled)
+            .apply()
+    }
+    
+    /**
+     * Проверяет, включена ли ежедневная выгрузка
+     */
+    fun isDailyUploadEnabled(): Boolean {
+        return prefs.getBoolean(KEY_DAILY_UPLOAD_ENABLED, false)
+    }
+    
+    /**
+     * Выполняет автоматическую выгрузку базы данных
+     */
+    suspend fun performAutoUpload(): SyncResult = withContext(Dispatchers.IO) {
+        try {
+            val accessToken = getSavedAccessToken()
+            if (accessToken == null) {
+                return@withContext SyncResult.Error("Токен доступа не найден")
+            }
+            
+            val localDbFile = context.getDatabasePath("bits_helper.db")
+            if (!localDbFile.exists()) {
+                return@withContext SyncResult.Error("Локальная база данных не найдена")
+            }
+            
+            // Создаем резервную копию перед выгрузкой
+            createBackup(accessToken)
+            
+            // Загружаем базу данных на Яндекс.Диск
+            val uploadResult = yandexDiskService.uploadDatabase(accessToken, localDbFile, remoteDbPath)
+            if (uploadResult.isFailure) {
+                return@withContext SyncResult.Error("Ошибка выгрузки: ${uploadResult.exceptionOrNull()?.message}")
+            }
+            
+            // Обновляем информацию о последней выгрузке
+            updateSyncInfo()
+            
+            return@withContext SyncResult.Success("База данных успешно выгружена на Яндекс.Диск")
+            
+        } catch (e: Exception) {
+            return@withContext SyncResult.Error("Ошибка автоматической выгрузки: ${e.message}")
+        }
+    }
+    
+    /**
+     * Проверяет, нужна ли ежедневная выгрузка
+     */
+    fun needsDailyUpload(): Boolean {
+        if (!isDailyUploadEnabled()) {
+            return false
+        }
+        
+        val lastUploadDate = getLastUploadDate()
+        val today = getCurrentDate()
+        
+        return lastUploadDate != today
+    }
+    
+    /**
+     * Получает дату последней выгрузки
+     */
+    private fun getLastUploadDate(): String {
+        return prefs.getString(KEY_LAST_UPLOAD_DATE, "") ?: ""
+    }
+    
+    /**
+     * Получает текущую дату в формате YYYY-MM-DD
+     */
+    private fun getCurrentDate(): String {
+        val calendar = Calendar.getInstance()
+        val year = calendar.get(Calendar.YEAR)
+        val month = (calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
+        val day = calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
+        return "$year-$month-$day"
+    }
+    
+    /**
+     * Обновляет дату последней выгрузки
+     */
+    private fun updateLastUploadDate() {
+        prefs.edit()
+            .putString(KEY_LAST_UPLOAD_DATE, getCurrentDate())
+            .apply()
+    }
+    
+    /**
+     * Выполняет ежедневную выгрузку при запуске приложения
+     */
+    suspend fun performDailyUploadIfNeeded(): SyncResult? = withContext(Dispatchers.IO) {
+        if (!needsDailyUpload()) {
+            return@withContext null // Выгрузка не нужна
+        }
+        
+        try {
+            val result = performAutoUpload()
+            
+            // Обновляем дату последней выгрузки только при успехе
+            if (result is SyncResult.Success) {
+                updateLastUploadDate()
+            }
+            
+            return@withContext result
+            
+        } catch (e: Exception) {
+            return@withContext SyncResult.Error("Ошибка ежедневной выгрузки: ${e.message}")
+        }
+    }
+    
+    /**
+     * Включает/выключает ежедневную загрузку
+     */
+    fun setDailyDownloadEnabled(enabled: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_DAILY_DOWNLOAD_ENABLED, enabled)
+            .apply()
+    }
+    
+    /**
+     * Проверяет, включена ли ежедневная загрузка
+     */
+    fun isDailyDownloadEnabled(): Boolean {
+        return prefs.getBoolean(KEY_DAILY_DOWNLOAD_ENABLED, false)
+    }
+    
+    /**
+     * Проверяет, нужна ли ежедневная загрузка
+     */
+    fun needsDailyDownload(): Boolean {
+        if (!isDailyDownloadEnabled()) {
+            return false
+        }
+        
+        val lastDownloadDate = getLastDownloadDate()
+        val today = getCurrentDate()
+        
+        return lastDownloadDate != today
+    }
+    
+    /**
+     * Получает дату последней загрузки
+     */
+    private fun getLastDownloadDate(): String {
+        return prefs.getString(KEY_LAST_DOWNLOAD_DATE, "") ?: ""
+    }
+    
+    /**
+     * Обновляет дату последней загрузки
+     */
+    private fun updateLastDownloadDate() {
+        prefs.edit()
+            .putString(KEY_LAST_DOWNLOAD_DATE, getCurrentDate())
+            .apply()
+    }
+    
+    /**
+     * Выполняет ежедневную загрузку при запуске приложения
+     */
+    suspend fun performDailyDownloadIfNeeded(): SyncResult? = withContext(Dispatchers.IO) {
+        if (!needsDailyDownload()) {
+            return@withContext null // Загрузка не нужна
+        }
+        
+        try {
+            val accessToken = getSavedAccessToken()
+            if (accessToken == null) {
+                return@withContext SyncResult.Error("Токен доступа не найден")
+            }
+            
+            val result = downloadDatabase(accessToken)
+            
+            // Обновляем дату последней загрузки только при успехе
+            if (result is SyncResult.Success) {
+                updateLastDownloadDate()
+            }
+            
+            return@withContext result
+            
+        } catch (e: Exception) {
+            return@withContext SyncResult.Error("Ошибка ежедневной загрузки: ${e.message}")
+        }
+    }
+    
+    /**
+     * Загружает базу данных с Яндекс.Диска
+     */
+    suspend fun downloadDatabase(accessToken: String): SyncResult = withContext(Dispatchers.IO) {
+        try {
+            val localDbFile = context.getDatabasePath("bits_helper.db")
+            return@withContext downloadRemoteDatabase(accessToken, localDbFile)
+        } catch (e: Exception) {
+            return@withContext SyncResult.Error("Ошибка загрузки базы данных: ${e.message}")
+        }
     }
 }
 

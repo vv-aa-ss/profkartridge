@@ -9,44 +9,61 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = Color(0xFFD2B48C),
+    onPrimary = Color(0xFF2F2B26),
+    primaryContainer = Color(0xFF8B7355),
+    onPrimaryContainer = Color(0xFFF5F5DC),
+    secondary = Color(0xFFDEB887),
+    onSecondary = Color(0xFF2F2B26),
+    secondaryContainer = Color(0xFFCD853F),
+    onSecondaryContainer = Color(0xFFF5F5DC),
+    surface = Color(0xFF3A2F26),
+    onSurface = Color(0xFFF5F5DC),
+    surfaceVariant = Color(0xFF4A3F36),
+    onSurfaceVariant = Color(0xFFE6D7C3),
+    background = Color(0xFF2F2B26),
+    onBackground = Color(0xFFF5F5DC),
+    outline = Color(0xFF8B7355),
+    outlineVariant = Color(0xFF6B5B4A)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = Color(0xFF0078D4),
     onPrimary = Color.White,
+    primaryContainer = Color(0xFFD0E7FF),
+    onPrimaryContainer = Color(0xFF001A33),
+    secondary = Color(0xFF6B7280),
     onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    secondaryContainer = Color(0xFFE5E7EB),
+    onSecondaryContainer = Color(0xFF1F2937),
+    surface = Color(0xFFF6F8FB),
+    onSurface = Color(0xFF0F172A),
+    surfaceVariant = Color(0xFFE6EAF0),
+    onSurfaceVariant = Color(0xFF374151),
+    background = Color(0xFFF5F6F7),
+    onBackground = Color(0xFF0F172A),
+    outline = Color(0xFFD1D5DB)
 )
 
 @Composable
 fun Bits_helperTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val context = LocalContext.current
+    val themeManager = remember { ThemeManager(context) }
+    val isSystemInDarkTheme = isSystemInDarkTheme()
+    val shouldUseDarkTheme = themeManager.shouldUseDarkTheme(isSystemInDarkTheme)
+    
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
+        shouldUseDarkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 

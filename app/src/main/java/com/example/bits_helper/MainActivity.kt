@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -74,6 +76,11 @@ import com.example.bits_helper.StatisticsScreen
 import com.example.bits_helper.SyncDialog
 import com.example.bits_helper.performSync
 import com.example.bits_helper.performAutoSync
+import com.example.bits_helper.checkAndPerformDailyUpload
+import com.example.bits_helper.performDownloadFromYandexDisk
+import com.example.bits_helper.ui.theme.ThemeManager
+import com.example.bits_helper.ui.theme.ThemeType
+import com.example.bits_helper.ui.theme.Bits_helperTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -110,18 +117,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
-    val fluentColors = lightColorScheme(
-        primary = Color(0xFF0078D4),
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFD0E7FF),
-        onPrimaryContainer = Color(0xFF001A33),
-        secondary = Color(0xFF6B7280),
-        surface = Color(0xFFF6F8FB),
-        onSurface = Color(0xFF0F172A),
-        surfaceVariant = Color(0xFFE6EAF0),
-        outline = Color(0xFFD1D5DB)
-    )
-    MaterialTheme(colorScheme = fluentColors) {
+    Bits_helperTheme {
         var showAddDialog by remember { mutableStateOf(false) }
         var changingId by remember { mutableStateOf<Long?>(null) }
         var showSheet by remember { mutableStateOf(false) }
@@ -132,21 +128,90 @@ fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
         var showStatistics by remember { mutableStateOf(false) }
         var showSyncDialog by remember { mutableStateOf(false) }
         var forceSyncDialog by remember { mutableStateOf(false) }
+        var showDownloadDialog by remember { mutableStateOf(false) }
+        var isDownloading by remember { mutableStateOf(false) }
         var isSyncing by remember { mutableStateOf(false) }
+        var isUploading by remember { mutableStateOf(false) }
+        var showSettings by remember { mutableStateOf(false) }
+        var settingsChanged by remember { mutableStateOf(0) }
+        var showDepartmentManagement by remember { mutableStateOf(false) }
+        var showScanResult by remember { mutableStateOf(false) }
+        var scanResult by remember { mutableStateOf<com.example.bits_helper.data.StatusUpdateResult?>(null) }
         val snackbarHostState = remember { SnackbarHostState() }
         val items = vm.cartridges.collectAsState(initial = emptyList()).value
+        
+        // Проверяем ежедневную выгрузку и загрузку при запуске приложения
+        LaunchedEffect(Unit) {
+            checkAndPerformDailyUpload(activity, snackbarHostState)
+            checkAndPerformDailyDownload(activity, snackbarHostState)
+        }
         if (showStatistics) {
             StatisticsScreen(
                 vm = vm,
                 onBack = { showStatistics = false }
             )
+        } else if (showDepartmentManagement) {
+            DepartmentManagementScreen(
+                vm = vm,
+                onBack = { showDepartmentManagement = false }
+            )
+        } else if (showSettings) {
+            SettingsScreen(
+                onBack = { showSettings = false },
+                onThemeChanged = { (activity as ComponentActivity).recreate() },
+                activity = activity,
+                onShowDepartmentManagement = { showDepartmentManagement = true },
+                vm = vm,
+                onSettingsChanged = { settingsChanged++ }
+            )
         } else {
             Scaffold(
-                containerColor = Color(0xFFF5F6F7),
-                topBar = { HeaderBar(vm, onSyncClick = { showSyncDialog = true }, onForceSyncClick = { forceSyncDialog = true }) },      // закреплённая шапка
+                topBar = { 
+                    val context = LocalContext.current
+                    HeaderBar(
+                        vm, 
+                        onSyncClick = { showDownloadDialog = true }, 
+                        onForceSyncClick = { forceSyncDialog = true },
+                        isUploading = isUploading,
+                        settingsChanged = settingsChanged,
+                        onUploadClick = {
+                            val syncManager = com.example.bits_helper.data.SyncManager(context)
+                            
+                            if (!syncManager.hasSavedToken()) {
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    snackbarHostState.showSnackbar("Сначала настройте синхронизацию с Яндекс.Диском")
+                                }
+                                return@HeaderBar
+                            }
+                            
+                            isUploading = true
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    val result = syncManager.performAutoUpload()
+                                    withContext(Dispatchers.Main) {
+                                        when (result) {
+                                            is com.example.bits_helper.data.SyncResult.Success -> {
+                                                snackbarHostState.showSnackbar("📤 ${result.message}")
+                                            }
+                                            is com.example.bits_helper.data.SyncResult.Error -> {
+                                                snackbarHostState.showSnackbar("⚠️ ${result.message}")
+                                            }
+                                        }
+                                        isUploading = false
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        snackbarHostState.showSnackbar("Ошибка выгрузки: ${e.message}")
+                                        isUploading = false
+                                    }
+                                }
+                            }
+                        }
+                    ) 
+                },      // закреплённая шапка
                 bottomBar = { 
                     val context = LocalContext.current
-                    BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }, onShowStatistics = { showStatistics = true }, onDataRefreshed = { (context as ComponentActivity).recreate() }, activity = activity) 
+                    BottomBar(vm, onAddClicked = { showAddDialog = true }, snackbarHostState = snackbarHostState, onQrNotFound = { number -> addDialogInitialNumber = number; showAddDialog = true }, onShowStatistics = { showStatistics = true }, onDataRefreshed = { (context as ComponentActivity).recreate() }, onShowSettings = { showSettings = true }, onScanResult = { result -> scanResult = result; showScanResult = true }, activity = activity, isUploading = isUploading, setIsUploading = { isUploading = it }) 
                 },
                 snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
             ) { padding ->
@@ -199,7 +264,10 @@ fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
             if (showEditDialog && editingCartridge != null) {
                 EditCartridgeDialog(
                     cartridge = editingCartridge!!,
-                    onDismiss = { showEditDialog = false; editingCartridge = null },
+                    onDismiss = { 
+                        showEditDialog = false
+                        editingCartridge = null
+                    },
                     onSave = { number, room, model, date, status, notes ->
                         vm.updateCartridge(editingCartridge!!.id, number, room, model, date, status, notes)
                         showEditDialog = false
@@ -215,8 +283,8 @@ fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
                         cartridge = cartridge,
                         onDismiss = { showContextMenu = null },
                         onEdit = {
-                            editingCartridge = cartridge
                             showContextMenu = null
+                            editingCartridge = cartridge
                             showEditDialog = true
                         },
                         onDelete = {
@@ -285,36 +353,228 @@ fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
                 isSyncing = isSyncing
             )
         }
+        
+        // Диалог подтверждения загрузки с Яндекс.Диска
+        if (showDownloadDialog) {
+            DownloadConfirmationDialog(
+                onDismiss = { showDownloadDialog = false },
+                onConfirm = {
+                    showDownloadDialog = false
+                    isDownloading = true
+                }
+            )
+        }
+        
+        // Выполняем загрузку после подтверждения
+        if (isDownloading) {
+            val context = LocalContext.current
+            val mainActivity = activity as MainActivity
+            LaunchedEffect(Unit) {
+                performDownloadFromYandexDisk(context, isDownloading, { isDownloading = it }, snackbarHostState) {
+                    // Полностью перезапускаем приложение для 100% обновления
+                    GlobalScope.launch {
+                        kotlinx.coroutines.delay(1000) // Даем время на завершение загрузки
+                        mainActivity.restartApp()
+                    }
+                }
+            }
+        }
+        
+
+        // Карточка результата сканирования
+        if (showScanResult && scanResult != null) {
+            val settingsManager = remember { SettingsManager(activity) }
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(settingsManager.getScanResultDelay()) // Используем настраиваемую задержку
+                showScanResult = false
+                scanResult = null
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable { showScanResult = false; scanResult = null },
+                contentAlignment = Alignment.Center
+            ) {
+                ScanResultCard(
+                    result = scanResult!!,
+                    onDismiss = { showScanResult = false; scanResult = null }
+                )
+            }
+        }
     }
 }
 
 /* =================== HEADER (закреплённый) =================== */
 
 @Composable
-fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick: () -> Unit) {
+fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick: () -> Unit, onUploadClick: () -> Unit, isUploading: Boolean = false, settingsChanged: Int = 0) {
+    val counts = vm.countsByStatus.collectAsState(initial = emptyMap()).value
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp
+    val isCompactScreen = screenWidth < 400 // Компактный режим для экранов меньше 400dp
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val settingsManager = remember { SettingsManager(context) }
+    val showUploadButton = settingsManager.showUploadButton()
+    val showDownloadButton = settingsManager.showDownloadButton()
+    
+    // Перезагружаем настройки при изменении
+    LaunchedEffect(settingsChanged) {
+        // Настройки обновятся автоматически через remember
+    }
+    
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color(0xFFF5F6F7))
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        val counts = vm.countsByStatus.collectAsState(initial = emptyMap()).value
+        if (isCompactScreen) {
+            // Компактный режим для маленьких экранов
         Row(
             Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ClickablePill("На заправке: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
-            Spacer(Modifier.width(10.dp))
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Только самые важные статусы
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    ClickablePill("З: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
+                    ClickablePill("С: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
+                }
+                
+                // Общий счетчик и кнопки
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TotalCountPill(counts.values.sum()) { vm.setFilter(null) }
+                    
+                    // Кнопка выгрузки (если включена)
+                    if (showUploadButton) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(if (isUploading) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = { onUploadClick() },
+                                        onLongPress = { onForceSyncClick() }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isUploading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.CloudUpload,
+                                    contentDescription = "Выгрузить",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Кнопка загрузки (если включена)
+                    if (showDownloadButton) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = { onSyncClick() },
+                                        onLongPress = { onForceSyncClick() }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CloudDownload,
+                                contentDescription = "Загрузить",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            // Обычный режим для больших экранов
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Левая часть: статусы (адаптивно)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Сокращенные названия для экономии места
+                    ClickablePill("Заправка: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
             ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
-            Spacer(Modifier.weight(1f))
+                }
+                
+                // Правая часть: общий счетчик и кнопки
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
             TotalCountPill(counts.values.sum()) { vm.setFilter(null) }
-            Spacer(Modifier.width(8.dp))
+                    
+                    // Кнопка выгрузки (если включена)
+                    if (showUploadButton) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(if (isUploading) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = { onUploadClick() },
+                                        onLongPress = { onForceSyncClick() }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isUploading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.CloudUpload,
+                                    contentDescription = "Выгрузить",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Кнопка загрузки (если включена)
+                    if (showDownloadButton) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF0078D4))
+                    .background(MaterialTheme.colorScheme.primary)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { onSyncClick() },
@@ -324,22 +584,39 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Sync,
-                    contentDescription = "Синхронизация",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
+                    imageVector = Icons.Rounded.CloudDownload,
+                                contentDescription = "Загрузить",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
+        
+        // Вторая строка: остальные статусы (адаптивно)
+        if (!isCompactScreen) {
         Row(
             Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             ClickablePill("Принят: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8) { vm.setFilter(Status.RECEIVED) }
-            Spacer(Modifier.width(10.dp))
             ClickablePill("Потерян: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
-            Spacer(Modifier.width(10.dp))
             ClickablePill("Списан: ${counts[Status.WRITTEN_OFF] ?: 0}", 0xFFF3E8FF, 0xFF8B5CF6) { vm.setFilter(Status.WRITTEN_OFF) }
+            }
+        } else {
+            // В компактном режиме показываем остальные статусы в одной строке с сокращениями
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                ClickablePill("П: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8) { vm.setFilter(Status.RECEIVED) }
+                ClickablePill("По: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
+                ClickablePill("Сп: ${counts[Status.WRITTEN_OFF] ?: 0}", 0xFFF3E8FF, 0xFF8B5CF6) { vm.setFilter(Status.WRITTEN_OFF) }
+            }
         }
     }
 }
@@ -347,54 +624,35 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
 /* =================== КНОПКИ СНИЗУ =================== */
 
 @Composable
-fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostState: SnackbarHostState, onQrNotFound: (String) -> Unit, onShowStatistics: () -> Unit, onDataRefreshed: () -> Unit, activity: ComponentActivity) {
+fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostState: SnackbarHostState, onQrNotFound: (String) -> Unit, onShowStatistics: () -> Unit, onDataRefreshed: () -> Unit, onShowSettings: () -> Unit, onScanResult: (com.example.bits_helper.data.StatusUpdateResult) -> Unit, activity: ComponentActivity, isUploading: Boolean = false, setIsUploading: (Boolean) -> Unit = {}) {
+    val context = LocalContext.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp
+    val isCompactScreen = screenWidth < 400
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .systemBarsPadding()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(if (isCompactScreen) 12.dp else 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 8.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         val filled = ButtonDefaults.filledTonalButtonColors(
-            containerColor = Color(0xFFEDE9FE)   // мягкая сиреневая заливка
+            containerColor = MaterialTheme.colorScheme.primaryContainer
         )
         val ctx = LocalContext.current
-        val scope = remember { CoroutineScope(Dispatchers.IO) }
-        val createDoc = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
-            uri ?: return@rememberLauncherForActivityResult
-            scope.launch { exportDatabase(ctx, uri) }
-        }
-        val openDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-            uri ?: return@rememberLauncherForActivityResult
-            val mainActivity = activity as MainActivity
-            scope.launch { 
-                importDatabase(ctx, uri)
-                // Показываем уведомление об успешном импорте
-                withContext(Dispatchers.Main) {
-                    snackbarHostState.showSnackbar("База данных импортирована. Приложение будет перезапущено для обновления данных.")
-                }
-                // Полностью перезапускаем приложение для 100% обновления
-                withContext(Dispatchers.Main) {
-                    GlobalScope.launch {
-                        kotlinx.coroutines.delay(1000) // Даем время на завершение импорта
-                        mainActivity.restartApp()
-                    }
-                }
-            }
-        }
         var menuExpanded by remember { mutableStateOf(false) }
 
         // «+»
         FilledTonalButton(
             onClick = { onAddClicked() },
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.weight(1f).height(56.dp),
+            shape = RoundedCornerShape(if (isCompactScreen) 16.dp else 18.dp),
+            modifier = Modifier.weight(1f).height(if (isCompactScreen) 48.dp else 56.dp),
             contentPadding = PaddingValues(0.dp),
             colors = filled
         ) {
-            Icon(Icons.Rounded.Add, contentDescription = "Добавить", modifier = Modifier.size(28.dp))
+            Icon(Icons.Rounded.Add, contentDescription = "Добавить", modifier = Modifier.size(if (isCompactScreen) 24.dp else 28.dp))
         }
 
         // Сканер (QR/штрихкод)
@@ -404,8 +662,8 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
                 vm.progressByNumber(value) { result ->
                     CoroutineScope(Dispatchers.Main).launch {
                         if (result != null) {
-                            val msg = "Картридж ${result.number} изменён на \"${result.newStatus.getRussianName()}\""
-                            snackbarHostState.showSnackbar(msg)
+                            // Показываем подробную карточку с информацией о картридже
+                            onScanResult(result)
                         } else {
                             // Картридж не найден - открываем форму добавления с предзаполненным номером
                             onQrNotFound(value)
@@ -416,24 +674,28 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
         }
         FilledTonalButton(
             onClick = { scannerLauncher.launch(Intent(ctx, ScannerActivity::class.java)) },
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.weight(1f).height(56.dp),
+            shape = RoundedCornerShape(if (isCompactScreen) 16.dp else 18.dp),
+            modifier = Modifier.weight(1f).height(if (isCompactScreen) 48.dp else 56.dp),
             colors = filled
         ) {
-            Icon(Icons.Rounded.QrCodeScanner, contentDescription = "Сканер", modifier = Modifier.size(28.dp))
+            Icon(Icons.Rounded.QrCodeScanner, contentDescription = "Сканер", modifier = Modifier.size(if (isCompactScreen) 24.dp else 28.dp))
         }
 
         // Меню (импорт/экспорт)
-        Box(Modifier.weight(1f).height(56.dp)) {
+        Box(Modifier.weight(1f).height(if (isCompactScreen) 48.dp else 56.dp)) {
             FilledTonalButton(
                 onClick = { menuExpanded = true },
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(if (isCompactScreen) 16.dp else 18.dp),
                 modifier = Modifier.fillMaxSize(),
                 colors = filled
             ) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = "Меню", modifier = Modifier.size(24.dp))
+                Icon(Icons.Rounded.MoreVert, contentDescription = "Меню", modifier = Modifier.size(if (isCompactScreen) 20.dp else 24.dp))
             }
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenu(
+                expanded = menuExpanded, 
+                onDismissRequest = { menuExpanded = false },
+                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+            ) {
                 DropdownMenuItem(
                     text = { Text("Отдать собранные") },
                     onClick = {
@@ -458,17 +720,10 @@ fun BottomBar(vm: CartridgeViewModel, onAddClicked: () -> Unit, snackbarHostStat
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Экспорт БД") },
+                    text = { Text("Настройки") },
                     onClick = {
                         menuExpanded = false
-                        createDoc.launch("bits_helper.db")
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Импорт БД") },
-                    onClick = {
-                        menuExpanded = false
-                        openDoc.launch(arrayOf("application/octet-stream", "*/*"))
+                        onShowSettings()
                     }
                 )
             }
@@ -495,17 +750,31 @@ fun PillStat(text: String, bg: Long, dot: Long) {
 
 @Composable
 fun ClickablePill(text: String, bg: Long, dot: Long, onClick: () -> Unit) {
+    val isDarkTheme = MaterialTheme.colorScheme.background == Color(0xFF2F2B26)
+    val adaptiveBg = if (isDarkTheme) {
+        // В темной теме все статусы имеют одинаковый цвет фона
+        0xFF4A3F36L // Темно-бежевый цвет, гармонирующий с темой
+    } else bg
+    
+    val adaptiveTextColor = if (isDarkTheme) Color(0xFFF5F5DC) else Color(0xFF2F2B26)
+    
     Row(
         Modifier
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(bg))
+            .background(Color(adaptiveBg))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dot)))
-        Spacer(Modifier.width(8.dp))
-        Text(text, fontSize = 14.sp, color = Color(0xFF0F172A))
+        Box(Modifier.size(8.dp).clip(CircleShape).background(Color(dot)))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = text, 
+            fontSize = 12.sp, 
+            color = adaptiveTextColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -513,17 +782,17 @@ fun ClickablePill(text: String, bg: Long, dot: Long, onClick: () -> Unit) {
 fun TotalCountPill(count: Int, onClick: () -> Unit) {
     Box(
         Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF0078D4))
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.primary)
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = count.toString(),
-            fontSize = 18.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onPrimary
         )
     }
 }
@@ -548,23 +817,32 @@ fun SummaryPill(text: String) {
     Row(
         Modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
-    ) { Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color(0xFF0F172A)) }
+    ) { Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface) }
 }
 
 @Composable
 fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClick: () -> Unit, onLongClick: () -> Unit) {
     Card(
-        modifier = modifier.pointerInput(Unit) {
-            detectTapGestures(
-                onLongPress = { onLongClick() }
-            )
-        },
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { onLongClick() }
+                )
+            }
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline,
+                shape = RoundedCornerShape(20.dp)
+            ),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -572,18 +850,18 @@ fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClic
                     StatusBadge(item.status)
                 }
                 Spacer(Modifier.width(12.dp))
-                Text(item.number, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = Color(0xFF0F172A))
+                Text(item.number, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.Rounded.LocationOn,
                     contentDescription = null,
-                    tint = Color(0xFF64748B),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
-                Text("Кабинет: ", color = Color(0xFF64748B), fontSize = 16.sp)
+                Text("Кабинет: ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
                 Text(
                     item.room,
-                    color = Color(0xFF0F172A),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -604,12 +882,7 @@ fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClic
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    Text(
-                        text = item.department ?: "",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = Color(0xFF0078D4)
-                    )
+                    DepartmentTag(item.department ?: "")
                 }
             }
         }
@@ -618,24 +891,61 @@ fun CartridgeCard(item: CartridgeUi, modifier: Modifier = Modifier, onStatusClic
 
 @Composable
 fun StatusBadge(status: Status) {
-    val (bgColor, dotColor, label) = when (status) {
-        Status.ISSUED -> Triple(0xFFE5F8E9, 0xFF16A34A, "Роздан")
-        Status.IN_REFILL -> Triple(0xFFFFF5CC, 0xFFEAB308, "На заправке")
-        Status.COLLECTED -> Triple(0xFFE5E7EB, 0xFF6B7280, "Собран")
-        Status.RECEIVED -> Triple(0xFFDBEAFE, 0xFF1D4ED8, "Принят")
-        Status.LOST -> Triple(0xFFFFE4E6, 0xFFEF4444, "Потерян")
-        Status.WRITTEN_OFF -> Triple(0xFFFCE7F3, 0xFFDB2777, "Списан")
+    val isDarkTheme = MaterialTheme.colorScheme.background == Color(0xFF2F2B26)
+    val (bgColor, dotColor, textColor, label) = when (status) {
+        Status.ISSUED -> if (isDarkTheme) 
+            listOf(0xFF4A3F36, 0xFF10B981, 0xFFF5F5DC, "Роздан")
+        else 
+            listOf(0xFFD1FAE5, 0xFF10B981, 0xFF2F2B26, "Роздан")
+        Status.IN_REFILL -> if (isDarkTheme)
+            listOf(0xFF4A3F36, 0xFFEAB308, 0xFFF5F5DC, "На заправке")
+        else
+            listOf(0xFFFFF5CC, 0xFFEAB308, 0xFF2F2B26, "На заправке")
+        Status.COLLECTED -> if (isDarkTheme)
+            listOf(0xFF4A3F36, 0xFF6B7280, 0xFFF5F5DC, "Собран")
+        else
+            listOf(0xFFEFF4FB, 0xFF6B7280, 0xFF2F2B26, "Собран")
+        Status.RECEIVED -> if (isDarkTheme)
+            listOf(0xFF4A3F36, 0xFF1D4ED8, 0xFFF5F5DC, "Принят")
+        else
+            listOf(0xFFDBEAFE, 0xFF1D4ED8, 0xFF2F2B26, "Принят")
+        Status.LOST -> if (isDarkTheme)
+            listOf(0xFF4A3F36, 0xFFEF4444, 0xFFF5F5DC, "Потерян")
+        else
+            listOf(0xFFFFE4E6, 0xFFEF4444, 0xFF2F2B26, "Потерян")
+        Status.WRITTEN_OFF -> if (isDarkTheme)
+            listOf(0xFF4A3F36, 0xFF8B5CF6, 0xFFF5F5DC, "Списан")
+        else
+            listOf(0xFFF3E8FF, 0xFF8B5CF6, 0xFF2F2B26, "Списан")
     }
     Row(
         Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(bgColor))
+            .background(Color(bgColor as Long))
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dotColor)))
+        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dotColor as Long)))
         Spacer(Modifier.width(8.dp))
-        Text(label, fontSize = 14.sp, color = Color(0xFF0F172A))
+        Text(label as String, fontSize = 14.sp, color = Color(textColor as Long))
+    }
+}
+
+@Composable
+fun DepartmentTag(department: String) {
+    Card(
+        modifier = Modifier,
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+    ) {
+        Text(
+            text = department,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
     }
 }
 
@@ -737,23 +1047,28 @@ fun StatusSelectList(onPick: (Status) -> Unit) {
                 AssistChip(onClick = { onPick(st) }, label = { Text("Выбрать") })
             }
         }
-        row(Status.ISSUED, "Роздан", 0xFFE5F8E9, 0xFF16A34A)
-        row(Status.IN_REFILL, "На заправке", 0xFFFFF5CC, 0xFFEAB308)
-        row(Status.COLLECTED, "Собран", 0xFFE5E7EB, 0xFF6B7280)
-        row(Status.RECEIVED, "Принят", 0xFFDBEAFE, 0xFF1D4ED8)
-        row(Status.LOST, "Потерян", 0xFFFFE4E6, 0xFFEF4444)
-        row(Status.WRITTEN_OFF, "Списан", 0xFFFCE7F3, 0xFFDB2777)
+        row(Status.ISSUED, "Роздан", 0xFFD1FAE5, 0xFF10B981)
+        row(Status.IN_REFILL, "На заправке", 0xFFF5F5DC, 0xFFDEB887)
+        row(Status.COLLECTED, "Собран", 0xFFF5F5DC, 0xFFE6D7C3)
+        row(Status.RECEIVED, "Принят", 0xFFF5F5DC, 0xFFD2B48C)
+        row(Status.LOST, "Потерян", 0xFFF5F5DC, 0xFFCD853F)
+        row(Status.WRITTEN_OFF, "Списан", 0xFFF5F5DC, 0xFFDEB887)
     }
 }
 
 @Composable
 fun InfoRow(label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(20.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFE2E8F0)))
+        Box(
+            Modifier
+                .size(20.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
         Spacer(Modifier.width(10.dp))
-        Text(label, color = Color(0xFF64748B), fontSize = 16.sp)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         Spacer(Modifier.width(6.dp))
-        Text(value, color = Color(0xFF0F172A), fontSize = 16.sp)
+        Text(value, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -833,6 +1148,201 @@ fun EditCartridgeDialog(
                 OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Модель") })
                 StatusDropdown(status = status, onChange = { status = it })
                 OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки") })
+            }
+        }
+    )
+}
+
+@Composable
+fun ScanResultCard(
+    result: com.example.bits_helper.data.StatusUpdateResult,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Заголовок с иконкой
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = "Успешно",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "Статус обновлен",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            // Номер картриджа
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.QrCodeScanner,
+                    contentDescription = "Номер",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Номер:",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = result.number,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            // Кабинет
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.LocationOn,
+                    contentDescription = "Кабинет",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Кабинет:",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = result.room,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            // Модель
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Inventory2,
+                    contentDescription = "Модель",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Модель:",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = result.model,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            // Подразделение (если есть)
+            if (!result.department.isNullOrBlank()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.LocalShipping,
+                        contentDescription = "Подразделение",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Подразделение:",
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = result.department,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            
+            // Новый статус
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatusBadge(result.newStatus)
+                Text(
+                    text = "→",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Новый статус",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DownloadConfirmationDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { 
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CloudDownload,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text("Загрузка с Яндекс.Диска", fontWeight = FontWeight.SemiBold)
+            }
+        },
+        text = { 
+            Text("Вы действительно хотите загрузить базу данных с Яндекс.Диска? Это действие заменит текущие данные.")
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { 
+                Text("Загрузить") 
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { 
+                Text("Отмена") 
             }
         }
     )

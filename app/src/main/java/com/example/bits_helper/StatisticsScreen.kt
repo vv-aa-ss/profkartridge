@@ -93,7 +93,7 @@ fun StatisticsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F6F7))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -104,7 +104,7 @@ fun StatisticsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
@@ -119,12 +119,12 @@ fun StatisticsScreen(
                             text = "📊 Статистика",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1F2937)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Анализ данных по картриджам",
                             fontSize = 14.sp,
-                            color = Color(0xFF6B7280)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     
@@ -135,7 +135,7 @@ fun StatisticsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF3F4F6))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(4.dp)
                     ) {
                         Button(
@@ -143,7 +143,7 @@ fun StatisticsScreen(
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (viewType == StatisticsViewType.CARDS) 
-                                    Color(0xFF0078D4) else Color.Transparent
+                                    MaterialTheme.colorScheme.primary else Color.Transparent
                             ),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             shape = RoundedCornerShape(8.dp)
@@ -151,7 +151,7 @@ fun StatisticsScreen(
                             Text(
                                 text = "Карточки",
                                 color = if (viewType == StatisticsViewType.CARDS) 
-                                    Color.White else Color(0xFF6B7280),
+                                    MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp
                             )
                         }
@@ -160,7 +160,7 @@ fun StatisticsScreen(
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (viewType == StatisticsViewType.MODELS) 
-                                    Color(0xFF0078D4) else Color.Transparent
+                                    MaterialTheme.colorScheme.primary else Color.Transparent
                             ),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             shape = RoundedCornerShape(8.dp)
@@ -168,7 +168,7 @@ fun StatisticsScreen(
                             Text(
                                 text = "Модели",
                                 color = if (viewType == StatisticsViewType.MODELS) 
-                                    Color.White else Color(0xFF6B7280),
+                                    MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp
                             )
                         }
@@ -279,7 +279,7 @@ fun ModelCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(
@@ -295,7 +295,7 @@ fun ModelCard(
                 text = model,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
-                color = Color(0xFF1F2937),
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
             
@@ -306,13 +306,13 @@ fun ModelCard(
                 Text(
                     text = date,
                     fontSize = 14.sp,
-                    color = Color(0xFF6B7280)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (!department.isNullOrBlank()) {
                     Text(
                         text = department,
                         fontSize = 12.sp,
-                        color = Color(0xFF9CA3AF)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -341,12 +341,13 @@ fun StatisticsFiltersDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Фильтры статистики", fontWeight = FontWeight.SemiBold) },
+        containerColor = MaterialTheme.colorScheme.surface,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Выбор даты "от"
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
@@ -356,7 +357,7 @@ fun StatisticsFiltersDialog(
                             text = "Дата от",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF374151)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(
@@ -372,7 +373,7 @@ fun StatisticsFiltersDialog(
                 // Выбор даты "до"
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
@@ -382,7 +383,7 @@ fun StatisticsFiltersDialog(
                             text = "Дата до",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF374151)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(
@@ -563,7 +564,7 @@ fun DatePickerDialog(
                 // Быстрый выбор дат
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
@@ -574,7 +575,7 @@ fun DatePickerDialog(
                             text = "Быстрый выбор:",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF374151)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -588,7 +589,7 @@ fun DatePickerDialog(
                                     selectedYear = today.year
                                 },
                                 modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0078D4)),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 contentPadding = PaddingValues(8.dp)
                             ) {
                                 Text("Сегодня", fontSize = 12.sp)
@@ -601,7 +602,7 @@ fun DatePickerDialog(
                                     selectedYear = yesterday.year
                                 },
                                 modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                                 contentPadding = PaddingValues(8.dp)
                             ) {
                                 Text("Вчера", fontSize = 12.sp)
@@ -619,7 +620,7 @@ fun DatePickerDialog(
                                     selectedYear = weekAgo.year
                                 },
                                 modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                                 contentPadding = PaddingValues(8.dp)
                             ) {
                                 Text("Неделю назад", fontSize = 12.sp)
@@ -632,7 +633,7 @@ fun DatePickerDialog(
                                     selectedYear = monthAgo.year
                                 },
                                 modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                                 contentPadding = PaddingValues(8.dp)
                             ) {
                                 Text("Месяц назад", fontSize = 12.sp)
@@ -719,7 +720,7 @@ fun AnimatedDateWheel(
         Text(
             text = label,
             fontSize = 12.sp,
-            color = Color(0xFF6B7280),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium
         )
         
@@ -730,7 +731,7 @@ fun AnimatedDateWheel(
                 .height(itemHeight * visibleItems)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFFF3F4F6))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { isDragging = true },
@@ -785,7 +786,7 @@ fun AnimatedDateWheel(
                         text = item.toString().padStart(2, '0'),
                         fontSize = if (isCenter) 18.sp else 16.sp,
                         fontWeight = if (isCenter) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isCenter) Color(0xFF1F2937) else Color(0xFF6B7280)
+                        color = if (isCenter) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -796,7 +797,7 @@ fun AnimatedDateWheel(
                     .fillMaxWidth()
                     .height(2.dp)
                     .offset(y = itemHeight * centerIndex)
-                    .background(Color(0xFF0078D4))
+                    .background(MaterialTheme.colorScheme.primary)
             )
         }
     }

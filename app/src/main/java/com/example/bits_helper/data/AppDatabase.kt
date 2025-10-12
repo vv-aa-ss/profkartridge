@@ -53,33 +53,19 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        // Prepopulate demo data on first run
+                        // Инициализация базовых подразделений для новых пользователей
                         CoroutineScope(Dispatchers.IO).launch {
                             val database = get(context)
-                            val cartridgeDao = database.cartridgeDao()
                             val departmentDao = database.departmentDao()
                             
-                            // Инициализация подразделений
+                            // Добавляем только базовые подразделения без демо-картриджей
                             val departments = listOf(
-                                DepartmentEntity("СУ-201", "428,429,430,421,415"),
-                                DepartmentEntity("СУ-202", "301,302,303,304,305"),
-                                DepartmentEntity("СУ-203", "201,202,203,204,205"),
-                                DepartmentEntity("СУ-204", "101,102,103,104,105")
+                                DepartmentEntity("IT-отдел", "101,102,103"),
+                                DepartmentEntity("Бухгалтерия", "201,202,203"),
+                                DepartmentEntity("Отдел кадров", "301,302,303"),
+                                DepartmentEntity("Склад", "401,402,403")
                             )
                             departmentDao.insert(departments)
-                            
-                            val demo = (1..12).map {
-                                CartridgeEntity(
-                                    number = (11800 + it).toString(),
-                                    room = (it % 7 + 1).toString(),
-                                    model = (6100 + it).toString(),
-                                    date = "2024-09-25",
-                                    status = if (it % 2 == 0) Status.ISSUED else Status.COLLECTED,
-                                    notes = null,
-                                    department = null
-                                )
-                            }
-                            cartridgeDao.insert(demo)
                         }
                     }
                 })
@@ -106,11 +92,11 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """)
                 
-                // Инициализируем подразделения
-                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('СУ-201', '428,429,430,421,415')")
-                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('СУ-202', '301,302,303,304,305')")
-                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('СУ-203', '201,202,203,204,205')")
-                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('СУ-204', '101,102,103,104,105')")
+                // Добавляем базовые подразделения только если таблица пуста
+                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('IT-отдел', '101,102,103')")
+                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('Бухгалтерия', '201,202,203')")
+                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('Отдел кадров', '301,302,303')")
+                db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('Склад', '401,402,403')")
             }
         }
     }

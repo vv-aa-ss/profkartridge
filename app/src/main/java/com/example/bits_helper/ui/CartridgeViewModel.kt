@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bits_helper.data.CartridgeRepository
 import com.example.bits_helper.data.CartridgeEntity
+import com.example.bits_helper.data.DepartmentEntity
 import com.example.bits_helper.data.Status
 import com.example.bits_helper.data.StatusUpdateResult
 import com.example.bits_helper.data.AppDatabase
@@ -126,6 +127,102 @@ class CartridgeViewModel(
         viewModelScope.launch {
             val departments = repository.getAllDepartments()
             onResult(departments)
+        }
+    }
+
+    fun getAllDepartmentEntities(onResult: (List<DepartmentEntity>) -> Unit) {
+        viewModelScope.launch {
+            val departments = repository.getAllDepartmentEntities()
+            onResult(departments)
+        }
+    }
+
+    fun addDepartment(name: String, rooms: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.addDepartment(name, rooms)
+                onResult(true)
+                refreshData() // Обновляем данные после добавления
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
+    }
+
+    fun updateDepartment(name: String, rooms: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.updateDepartment(name, rooms)
+                onResult(true)
+                refreshData() // Обновляем данные после изменения
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
+    }
+
+    fun deleteDepartment(name: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.deleteDepartment(name)
+                onResult(true)
+                refreshData() // Обновляем данные после удаления
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
+    }
+
+    /**
+     * Обновляет подразделения для всех картриджей без подразделения
+     */
+    fun updateMissingDepartments(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val updatedCount = repository.updateMissingDepartments()
+            onResult(updatedCount)
+            // Обновляем данные после изменения
+            refreshData()
+        }
+    }
+
+    /**
+     * Проверяет количество картриджей без подразделения
+     */
+    fun getCartridgesWithoutDepartmentCount(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val count = repository.getCartridgesWithoutDepartmentCount()
+            onResult(count)
+        }
+    }
+
+    fun getCartridgeCount(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val count = repository.getCartridgeCount()
+            onResult(count)
+        }
+    }
+
+    fun clearAllCartridges(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.clearAllCartridges()
+                onResult(true)
+                refreshData() // Обновляем данные после очистки
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
+    }
+
+    fun clearAllSyncData(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val syncManager = com.example.bits_helper.data.SyncManager(context)
+                syncManager.clearAllSyncData()
+                onResult(true)
+            } catch (e: Exception) {
+                onResult(false)
+            }
         }
     }
     
