@@ -510,7 +510,8 @@ fun StatisticsFiltersDialog(
                             placeholder = { Text("Все", fontSize = 14.sp) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                     }
                 }
@@ -537,7 +538,8 @@ fun StatisticsFiltersDialog(
                             placeholder = { Text("Все", fontSize = 14.sp) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                     }
                 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.LocationOn
@@ -412,11 +413,17 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
     val counts = vm.countsByStatus.collectAsState(initial = emptyMap()).value
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp
-    val isCompactScreen = screenWidth < 400 // Компактный режим для экранов меньше 400dp
     val context = androidx.compose.ui.platform.LocalContext.current
     val settingsManager = remember { SettingsManager(context) }
+    val compactModeThreshold = settingsManager.getCompactModeThreshold()
+    val isCompactScreen = screenWidth < compactModeThreshold
     val showUploadButton = settingsManager.showUploadButton()
     val showDownloadButton = settingsManager.showDownloadButton()
+    val filterFontSize = settingsManager.getFilterFontSize()
+    val filterIconSize = settingsManager.getFilterIconSize()
+    
+    // Определяем, нужно ли использовать сокращенные названия
+    val useShortNames = screenWidth < 360 || (isCompactScreen && screenWidth < 420)
     
     // Перезагружаем настройки при изменении
     LaunchedEffect(settingsChanged) {
@@ -427,7 +434,8 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
         Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .statusBarsPadding(), // Добавляем отступ для статус бара
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (isCompactScreen) {
@@ -437,14 +445,16 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Только самые важные статусы
+                // Только самые важные статусы с сокращенными названиями
                 Row(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    ClickablePill("З: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
-                    ClickablePill("С: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
+                    val refillText = if (useShortNames) "З: ${counts[Status.IN_REFILL] ?: 0}" else "Заправка: ${counts[Status.IN_REFILL] ?: 0}"
+                    val collectedText = if (useShortNames) "С: ${counts[Status.COLLECTED] ?: 0}" else "Собран: ${counts[Status.COLLECTED] ?: 0}"
+                    ClickablePill(refillText, 0xFFFFF5CC, 0xFFEAB308, filterFontSize, filterIconSize) { vm.setFilter(Status.IN_REFILL) }
+                    ClickablePill(collectedText, 0xFFEFF4FB, 0xFF6B7280, filterFontSize, filterIconSize) { vm.setFilter(Status.COLLECTED) }
                 }
                 
                 // Общий счетчик и кнопки
@@ -525,8 +535,8 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Сокращенные названия для экономии места
-                    ClickablePill("Заправка: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308) { vm.setFilter(Status.IN_REFILL) }
-            ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280) { vm.setFilter(Status.COLLECTED) }
+                    ClickablePill("Заправка: ${counts[Status.IN_REFILL] ?: 0}", 0xFFFFF5CC, 0xFFEAB308, filterFontSize, filterIconSize) { vm.setFilter(Status.IN_REFILL) }
+            ClickablePill("Собран: ${counts[Status.COLLECTED] ?: 0}", 0xFFEFF4FB, 0xFF6B7280, filterFontSize, filterIconSize) { vm.setFilter(Status.COLLECTED) }
                 }
                 
                 // Правая часть: общий счетчик и кнопки
@@ -602,9 +612,9 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            ClickablePill("Принят: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8) { vm.setFilter(Status.RECEIVED) }
-            ClickablePill("Потерян: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
-            ClickablePill("Списан: ${counts[Status.WRITTEN_OFF] ?: 0}", 0xFFF3E8FF, 0xFF8B5CF6) { vm.setFilter(Status.WRITTEN_OFF) }
+            ClickablePill("Принят: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8, filterFontSize, filterIconSize) { vm.setFilter(Status.RECEIVED) }
+            ClickablePill("Потерян: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444, filterFontSize, filterIconSize) { vm.setFilter(Status.LOST) }
+            ClickablePill("Списан: ${counts[Status.WRITTEN_OFF] ?: 0}", 0xFFF3E8FF, 0xFF8B5CF6, filterFontSize, filterIconSize) { vm.setFilter(Status.WRITTEN_OFF) }
             }
         } else {
             // В компактном режиме показываем остальные статусы в одной строке с сокращениями
@@ -613,9 +623,12 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                ClickablePill("П: ${counts[Status.RECEIVED] ?: 0}", 0xFFDBEAFE, 0xFF1D4ED8) { vm.setFilter(Status.RECEIVED) }
-                ClickablePill("По: ${counts[Status.LOST] ?: 0}", 0xFFFFE4E6, 0xFFEF4444) { vm.setFilter(Status.LOST) }
-                ClickablePill("Сп: ${counts[Status.WRITTEN_OFF] ?: 0}", 0xFFF3E8FF, 0xFF8B5CF6) { vm.setFilter(Status.WRITTEN_OFF) }
+                val receivedText = if (useShortNames) "П: ${counts[Status.RECEIVED] ?: 0}" else "Принят: ${counts[Status.RECEIVED] ?: 0}"
+                val lostText = if (useShortNames) "По: ${counts[Status.LOST] ?: 0}" else "Потерян: ${counts[Status.LOST] ?: 0}"
+                val writtenOffText = if (useShortNames) "Сп: ${counts[Status.WRITTEN_OFF] ?: 0}" else "Списан: ${counts[Status.WRITTEN_OFF] ?: 0}"
+                ClickablePill(receivedText, 0xFFDBEAFE, 0xFF1D4ED8, filterFontSize, filterIconSize) { vm.setFilter(Status.RECEIVED) }
+                ClickablePill(lostText, 0xFFFFE4E6, 0xFFEF4444, filterFontSize, filterIconSize) { vm.setFilter(Status.LOST) }
+                ClickablePill(writtenOffText, 0xFFF3E8FF, 0xFF8B5CF6, filterFontSize, filterIconSize) { vm.setFilter(Status.WRITTEN_OFF) }
             }
         }
     }
@@ -749,7 +762,7 @@ fun PillStat(text: String, bg: Long, dot: Long) {
 }
 
 @Composable
-fun ClickablePill(text: String, bg: Long, dot: Long, onClick: () -> Unit) {
+fun ClickablePill(text: String, bg: Long, dot: Long, fontSize: Float = 12f, iconSize: Float = 8f, onClick: () -> Unit) {
     val isDarkTheme = MaterialTheme.colorScheme.background == Color(0xFF2F2B26)
     val adaptiveBg = if (isDarkTheme) {
         // В темной теме все статусы имеют одинаковый цвет фона
@@ -766,11 +779,11 @@ fun ClickablePill(text: String, bg: Long, dot: Long, onClick: () -> Unit) {
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(Color(dot)))
+        Box(Modifier.size(iconSize.dp).clip(CircleShape).background(Color(dot)))
         Spacer(Modifier.width(6.dp))
         Text(
             text = text, 
-            fontSize = 12.sp, 
+            fontSize = fontSize.sp, 
             color = adaptiveTextColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -1035,14 +1048,14 @@ fun StatusSelectList(onPick: (Status) -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFFFFFFF))
+                    .background(MaterialTheme.colorScheme.surface)
                     .clickable { onPick(st) }
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dot)))
                 Spacer(Modifier.width(10.dp))
-                Text(label, fontSize = 16.sp, color = Color(0xFF0F172A))
+                Text(label, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.weight(1f))
                 AssistChip(onClick = { onPick(st) }, label = { Text("Выбрать") })
             }

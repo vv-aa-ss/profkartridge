@@ -227,8 +227,16 @@ class CartridgeViewModel(
     fun clearAllSyncData(onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             try {
+                // Сначала очищаем все картриджи через репозиторий
+                repository.clearAllCartridges()
+                
+                // Затем очищаем все настройки синхронизации и удаляем файлы БД
                 val syncManager = com.example.bits_helper.data.SyncManager(context)
                 syncManager.clearAllSyncData()
+                
+                // Обновляем данные после очистки
+                refreshData()
+                
                 onResult(true)
             } catch (e: Exception) {
                 onResult(false)

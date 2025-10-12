@@ -14,6 +14,12 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Business
+import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,11 +54,14 @@ fun SettingsScreen(
     val settingsManager = remember { SettingsManager(context) }
     var currentTheme by remember { mutableStateOf(themeManager.getThemeType()) }
     var scanDelay by remember { mutableStateOf(settingsManager.getScanResultDelaySeconds()) }
+    var filterFontSize by remember { mutableStateOf(settingsManager.getFilterFontSize()) }
+    var filterIconSize by remember { mutableStateOf(settingsManager.getFilterIconSize()) }
+    var compactModeThreshold by remember { mutableStateOf(settingsManager.getCompactModeThreshold()) }
     
     // Диалоги для административных функций
-    var showClearDatabaseDialog by remember { mutableStateOf(false) }
     var showClearAllDataDialog by remember { mutableStateOf(false) }
-    var isUploading by remember { mutableStateOf(false) }
+    var showSyncSetupDialog by remember { mutableStateOf(false) }
+    var isSyncing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     
     // Логика экспорта/импорта
@@ -316,6 +325,282 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
+                                imageVector = Icons.Rounded.CloudSync,
+                                contentDescription = "Синхронизация",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Синхронизация с Яндекс.Диском",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        
+                        Text(
+                            text = "Настройка токена доступа и параметров синхронизации",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        // Статус синхронизации
+                        val syncManager = remember { SyncManager(context) }
+                        val isSyncConfigured = remember { mutableStateOf(syncManager.hasSavedToken()) }
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isSyncConfigured.value) Icons.Rounded.CheckCircle else Icons.Rounded.Warning,
+                                contentDescription = "Статус",
+                                tint = if (isSyncConfigured.value) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = if (isSyncConfigured.value) "Синхронизация настроена" else "Синхронизация не настроена",
+                                fontSize = 16.sp,
+                                color = if (isSyncConfigured.value) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                            )
+                        }
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Кнопка настройки синхронизации
+                            OutlinedButton(
+                                onClick = { showSyncSetupDialog = true },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.CloudSync,
+                                        contentDescription = "Настроить",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(if (isSyncConfigured.value) "Изменить" else "Настроить")
+                                }
+                            }
+                            
+                            // Кнопка очистки настроек синхронизации (только если настроена)
+                            if (isSyncConfigured.value) {
+                                OutlinedButton(
+                                    onClick = {
+                                        syncManager.clearAccessToken()
+                                        isSyncConfigured.value = false
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            snackbarHostState.showSnackbar("Настройки синхронизации очищены")
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = "Очистить",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text("Очистить")
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Text(
+                            text = "Настройте токен доступа для синхронизации данных с Яндекс.Диском",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Tune,
+                                contentDescription = "Настройки интерфейса",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Настройки интерфейса",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        
+                        Text(
+                            text = "Настройка кнопки фильтров",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        // Размер шрифта фильтров
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.TextFields,
+                                contentDescription = "Размер шрифта",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Шрифт:",
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            
+                            Slider(
+                                value = filterFontSize,
+                                onValueChange = { newValue ->
+                                    filterFontSize = newValue
+                                    settingsManager.setFilterFontSize(filterFontSize)
+                                    onSettingsChanged()
+                                },
+                                valueRange = 8f..18f,
+                                steps = 9, // 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            Text(
+                                text = "${filterFontSize.toInt()}",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(24.dp)
+                            )
+                        }
+                        
+                        // Размер иконок фильтров
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Tune,
+                                contentDescription = "Размер иконок",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Кружок:",
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            
+                            Slider(
+                                value = filterIconSize,
+                                onValueChange = { newValue ->
+                                    filterIconSize = newValue
+                                    settingsManager.setFilterIconSize(filterIconSize)
+                                    onSettingsChanged()
+                                },
+                                valueRange = 4f..16f,
+                                steps = 11, // 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            Text(
+                                text = "${filterIconSize.toInt()}",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(24.dp)
+                            )
+                        }
+                        
+                        // Порог компактного режима
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Tune,
+                                contentDescription = "Порог компактного режима",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Компакт режим:",
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            
+                            Slider(
+                                value = compactModeThreshold.toFloat(),
+                                onValueChange = { newValue ->
+                                    compactModeThreshold = newValue.toInt()
+                                    settingsManager.setCompactModeThreshold(compactModeThreshold)
+                                    onSettingsChanged()
+                                },
+                                valueRange = 300f..600f,
+                                steps = 11, // 300, 330, 360, 390, 420, 450, 480, 510, 540, 570, 600
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            Text(
+                                text = "${compactModeThreshold}",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(32.dp)
+                            )
+                        }
+                        
+                        Text(
+                            text = "Компактный режим активируется для экранов уже указанной ширины. В компактном режиме используются сокращенные названия фильтров.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
                                 imageVector = Icons.Rounded.Business,
                                 contentDescription = "Подразделения",
                                 tint = MaterialTheme.colorScheme.primary,
@@ -362,129 +647,6 @@ fun SettingsScreen(
                 }
             }
             
-            // Административные функции (только если передан ViewModel)
-            if (vm != null) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "Административные функции",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            
-                            Text(
-                                text = "Управление данными и синхронизацией",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            
-                            // Кнопка выгрузки базы на Яндекс.Диск
-                            OutlinedButton(
-                                onClick = {
-                                    val syncManager = SyncManager(context)
-                                    if (!syncManager.hasSavedToken()) {
-                                        CoroutineScope(Dispatchers.Main).launch {
-                                            snackbarHostState.showSnackbar("Сначала настройте синхронизацию с Яндекс.Диском")
-                                        }
-                                        return@OutlinedButton
-                                    }
-                                    
-                                    isUploading = true
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        try {
-                                            val result = syncManager.performAutoUpload()
-                                            withContext(Dispatchers.Main) {
-                                                when (result) {
-                                                    is com.example.bits_helper.data.SyncResult.Success -> {
-                                                        snackbarHostState.showSnackbar("📤 ${result.message}")
-                                                    }
-                                                    is com.example.bits_helper.data.SyncResult.Error -> {
-                                                        snackbarHostState.showSnackbar("⚠️ ${result.message}")
-                                                    }
-                                                }
-                                                isUploading = false
-                                            }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) {
-                                                snackbarHostState.showSnackbar("Ошибка выгрузки: ${e.message}")
-                                                isUploading = false
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                enabled = !isUploading
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.CloudUpload,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(if (isUploading) "Выгрузка..." else "Выгрузить базу")
-                                }
-                            }
-                            
-                            // Кнопка обновления подразделений
-                            OutlinedButton(
-                                onClick = {
-                                    vm.updateMissingDepartments { updatedCount ->
-                                        CoroutineScope(Dispatchers.Main).launch {
-                                            val msg = if (updatedCount > 0) {
-                                                "Обновлено подразделений: $updatedCount"
-                                            } else {
-                                                "Все картриджи уже имеют подразделения"
-                                            }
-                                            snackbarHostState.showSnackbar(msg)
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Обновить подразделения")
-                            }
-                            
-                            // Кнопка очистки картриджей
-                            OutlinedButton(
-                                onClick = { showClearDatabaseDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Очистить все картриджи")
-                            }
-                            
-                            // Кнопка очистки всех данных
-                            OutlinedButton(
-                                onClick = { showClearAllDataDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Очистить все данные")
-                            }
-                            
-                            Text(
-                                text = "Внимание: операции очистки нельзя отменить!",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
-            }
             
             item {
                 Card(
@@ -504,7 +666,7 @@ fun SettingsScreen(
                         )
                         
                         Text(
-                            text = "Экспорт и импорт базы данных картриджей",
+                            text = "Экспорт, импорт и управление данными приложения",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -557,6 +719,47 @@ fun SettingsScreen(
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        
+                        // Кнопка обновления подразделений (только если передан ViewModel)
+                        if (vm != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    vm.updateMissingDepartments { updatedCount ->
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            val msg = if (updatedCount > 0) {
+                                                "Обновлено подразделений: $updatedCount"
+                                            } else {
+                                                "Все картриджи уже имеют подразделения"
+                                            }
+                                            snackbarHostState.showSnackbar(msg)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Обновить подразделения")
+                            }
+                        }
+                        
+                        // Кнопка очистки всех данных (только если передан ViewModel)
+                        if (vm != null) {
+                            OutlinedButton(
+                                onClick = { showClearAllDataDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Очистить все данные")
+                            }
+                        }
+                        
+                        if (vm != null) {
+                            Text(
+                                text = "Внимание: операции очистки нельзя отменить!",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
@@ -569,42 +772,6 @@ fun SettingsScreen(
         modifier = Modifier.fillMaxSize()
     )
     
-    // Диалог подтверждения очистки базы данных
-    if (showClearDatabaseDialog && vm != null) {
-        AlertDialog(
-            onDismissRequest = { showClearDatabaseDialog = false },
-            title = { 
-                Text("Очистить все картриджи", fontWeight = FontWeight.SemiBold) 
-            },
-            text = { 
-                Text("Вы действительно хотите удалить ВСЕ картриджи из базы данных?\n\nЭто действие нельзя отменить. Подразделения останутся без изменений.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.clearAllCartridges { success ->
-                            CoroutineScope(Dispatchers.Main).launch {
-                                val msg = if (success) {
-                                    "Все картриджи удалены"
-                                } else {
-                                    "Ошибка при удалении картриджей"
-                                }
-                                snackbarHostState.showSnackbar(msg)
-                            }
-                        }
-                        showClearDatabaseDialog = false
-                    }
-                ) { 
-                    Text("Удалить все", color = MaterialTheme.colorScheme.error) 
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDatabaseDialog = false }) { 
-                    Text("Отмена") 
-                }
-            }
-        )
-    }
     
     // Диалог подтверждения очистки всех данных
     if (showClearAllDataDialog && vm != null) {
@@ -640,6 +807,47 @@ fun SettingsScreen(
                     Text("Отмена") 
                 }
             }
+        )
+    }
+    
+    // Диалог настройки синхронизации
+    if (showSyncSetupDialog) {
+        SyncDialog(
+            onDismiss = { 
+                showSyncSetupDialog = false
+                // Обновляем статус синхронизации после закрытия диалога
+                val syncManager = SyncManager(context)
+                // Здесь можно обновить isSyncConfigured если нужно
+            },
+            onSync = { accessToken ->
+                // Выполняем синхронизацию
+                isSyncing = true
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val syncManager = SyncManager(context)
+                        val result = syncManager.syncDatabase(accessToken)
+                        withContext(Dispatchers.Main) {
+                            when (result) {
+                                is com.example.bits_helper.data.SyncResult.Success -> {
+                                    snackbarHostState.showSnackbar("📤 ${result.message}")
+                                }
+                                is com.example.bits_helper.data.SyncResult.Error -> {
+                                    snackbarHostState.showSnackbar("⚠️ ${result.message}")
+                                }
+                            }
+                            isSyncing = false
+                            showSyncSetupDialog = false
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            snackbarHostState.showSnackbar("Ошибка синхронизации: ${e.message}")
+                            isSyncing = false
+                            showSyncSetupDialog = false
+                        }
+                    }
+                }
+            },
+            isSyncing = isSyncing
         )
     }
 }
