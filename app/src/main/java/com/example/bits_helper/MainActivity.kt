@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Process
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.view.WindowCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
@@ -54,6 +55,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +65,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.bits_helper.data.AppDatabase
 import com.example.bits_helper.data.CartridgeRepository
 import com.example.bits_helper.ui.CartridgeUi
@@ -91,6 +97,8 @@ import kotlinx.coroutines.GlobalScope
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Enable edge-to-edge display
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         val database = AppDatabase.get(applicationContext)
         val repository = CartridgeRepository(database.cartridgeDao(), database.departmentDao())
         setContent {
@@ -119,6 +127,23 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
     Bits_helperTheme {
+        val context = LocalContext.current
+        val themeManager = remember { ThemeManager(context) }
+        val isSystemInDarkTheme = isSystemInDarkTheme()
+        val isDarkTheme = themeManager.shouldUseDarkTheme(isSystemInDarkTheme)
+        val backgroundColor = MaterialTheme.colorScheme.background
+        
+        // Настройка цветов системных баров
+        SideEffect {
+            val window = (activity as? ComponentActivity)?.window ?: return@SideEffect
+            window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
+            // Настройка цвета иконок системных баров
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.isAppearanceLightStatusBars = !isDarkTheme
+            insetsController.isAppearanceLightNavigationBars = !isDarkTheme
+        }
+        
         var showAddDialog by remember { mutableStateOf(false) }
         var changingId by remember { mutableStateOf<Long?>(null) }
         var showSheet by remember { mutableStateOf(false) }
@@ -263,34 +288,53 @@ fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
                 }
             }
             if (showEditDialog && editingCartridge != null) {
-                EditCartridgeDialog(
-                    cartridge = editingCartridge!!,
-                    onDismiss = { 
-                        showEditDialog = false
-                        editingCartridge = null
-                    },
-                    onSave = { number, room, model, date, status, notes ->
-                        vm.updateCartridge(editingCartridge!!.id, number, room, model, date, status, notes)
-                        showEditDialog = false
-                        editingCartridge = null
-                    }
-                )
+                // Используем key для принудительного пересоздания диалога при изменении карточки
+                key(editingCartridge!!.id) {
+                    // Получаем актуальную карточку из списка, а не используем кэшированное значение
+                    val currentCartridge = items.find { it.id == editingCartridge!!.id } ?: editingCartridge!!
+                    EditCartridgeDialog(
+                        cartridge = currentCartridge,
+                        onDismiss = { 
+                            showEditDialog = false
+                            editingCartridge = null
+                        },
+                        onSave = { number, room, model, date, status, notes ->
+                            vm.updateCartridge(currentCartridge.id, number, room, model, date, status, notes)
+                            showEditDialog = false
+                            editingCartridge = null
+                        }
+                    )
+                }
             }
             if (showContextMenu != null) {
                 val cartridgeId = showContextMenu!!
                 val cartridge = items.find { it.id == cartridgeId }
                 if (cartridge != null) {
+                    // Сбрасываем предыдущее состояние редактирования при открытии нового контекстного меню
+                    LaunchedEffect(cartridgeId) {
+                        editingCartridge = null
+                        showEditDialog = false
+                    }
+                    
                     ContextMenuDialog(
                         cartridge = cartridge,
-                        onDismiss = { showContextMenu = null },
+                        onDismiss = { 
+                            showContextMenu = null
+                            // Гарантируем сброс состояния редактирования при закрытии меню
+                            editingCartridge = null
+                            showEditDialog = false
+                        },
                         onEdit = {
                             showContextMenu = null
+                            // Обновляем editingCartridge ПЕРЕД открытием диалога
                             editingCartridge = cartridge
                             showEditDialog = true
                         },
                         onDelete = {
                             vm.deleteById(cartridgeId)
                             showContextMenu = null
+                            editingCartridge = null
+                            showEditDialog = false
                             CoroutineScope(Dispatchers.Main).launch {
                                 snackbarHostState.showSnackbar("Картридж удален")
                             }
@@ -434,8 +478,8 @@ fun HeaderBar(vm: CartridgeViewModel, onSyncClick: () -> Unit, onForceSyncClick:
         Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .statusBarsPadding(), // Добавляем отступ для статус бара
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (isCompactScreen) {
@@ -1041,31 +1085,58 @@ fun StatusDropdown(status: Status, onChange: (Status) -> Unit) {
 
 @Composable
 fun StatusSelectList(onPick: (Status) -> Unit) {
+    val isDarkTheme = MaterialTheme.colorScheme.background == Color(0xFF2F2B26)
+    
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         @Composable
-        fun row(st: Status, label: String, bg: Long, dot: Long) {
+        fun row(st: Status, label: String) {
+            val (bgColor, dotColor, textColor) = when (st) {
+                Status.ISSUED -> if (isDarkTheme) 
+                    listOf(0xFF4A3F36, 0xFF10B981, 0xFFF5F5DC)
+                else 
+                    listOf(0xFFD1FAE5, 0xFF10B981, 0xFF2F2B26)
+                Status.IN_REFILL -> if (isDarkTheme)
+                    listOf(0xFF4A3F36, 0xFFEAB308, 0xFFF5F5DC)
+                else
+                    listOf(0xFFFFF5CC, 0xFFEAB308, 0xFF2F2B26)
+                Status.COLLECTED -> if (isDarkTheme)
+                    listOf(0xFF4A3F36, 0xFF6B7280, 0xFFF5F5DC)
+                else
+                    listOf(0xFFEFF4FB, 0xFF6B7280, 0xFF2F2B26)
+                Status.RECEIVED -> if (isDarkTheme)
+                    listOf(0xFF4A3F36, 0xFF1D4ED8, 0xFFF5F5DC)
+                else
+                    listOf(0xFFDBEAFE, 0xFF1D4ED8, 0xFF2F2B26)
+                Status.LOST -> if (isDarkTheme)
+                    listOf(0xFF4A3F36, 0xFFEF4444, 0xFFF5F5DC)
+                else
+                    listOf(0xFFFFE4E6, 0xFFEF4444, 0xFF2F2B26)
+                Status.WRITTEN_OFF -> if (isDarkTheme)
+                    listOf(0xFF4A3F36, 0xFF8B5CF6, 0xFFF5F5DC)
+                else
+                    listOf(0xFFF3E8FF, 0xFF8B5CF6, 0xFF2F2B26)
+            }
+            
             Row(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(Color(bgColor as Long))
                     .clickable { onPick(st) }
-                    .padding(12.dp),
+                    .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(Color(dot)))
-                Spacer(Modifier.width(10.dp))
-                Text(label, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(Modifier.weight(1f))
-                AssistChip(onClick = { onPick(st) }, label = { Text("Выбрать") })
+                Box(Modifier.size(12.dp).clip(CircleShape).background(Color(dotColor as Long)))
+                Spacer(Modifier.width(12.dp))
+                Text(label, fontSize = 16.sp, color = Color(textColor as Long))
             }
         }
-        row(Status.ISSUED, "Роздан", 0xFFD1FAE5, 0xFF10B981)
-        row(Status.IN_REFILL, "На заправке", 0xFFF5F5DC, 0xFFDEB887)
-        row(Status.COLLECTED, "Собран", 0xFFF5F5DC, 0xFFE6D7C3)
-        row(Status.RECEIVED, "Принят", 0xFFF5F5DC, 0xFFD2B48C)
-        row(Status.LOST, "Потерян", 0xFFF5F5DC, 0xFFCD853F)
-        row(Status.WRITTEN_OFF, "Списан", 0xFFF5F5DC, 0xFFDEB887)
+        row(Status.ISSUED, "Роздан")
+        row(Status.IN_REFILL, "На заправке")
+        row(Status.COLLECTED, "Собран")
+        row(Status.RECEIVED, "Принят")
+        row(Status.LOST, "Потерян")
+        row(Status.WRITTEN_OFF, "Списан")
     }
 }
 

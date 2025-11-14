@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme for Compose app -->
+    <style name="Theme.Bits_helper" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Transparent system bars for edge-to-edge -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Enable edge-to-edge display -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <!-- Dark background to match dark theme -->
+        <item name="android:windowBackground">@color/dark_background</item>
+        <!-- Light status bar icons for dark theme -->
+        <item name="android:windowLightStatusBar">false</item>
+        <!-- Light navigation bar icons for dark theme -->
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
+

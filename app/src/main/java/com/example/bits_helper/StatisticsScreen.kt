@@ -28,8 +28,11 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material3.*
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +58,8 @@ fun StatisticsScreen(
     var showContextMenu by remember { mutableStateOf<Long?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
     var editingCartridge by remember { mutableStateOf<CartridgeUi?>(null) }
+    var showSheet by remember { mutableStateOf(false) }
+    var changingId by remember { mutableStateOf<Long?>(null) }
     
     // Инициализация дат по умолчанию
     val today = LocalDate.now()
@@ -191,7 +196,10 @@ fun StatisticsScreen(
                             CartridgeCard(
                                 item = item,
                                 modifier = Modifier.fillMaxWidth(),
-                                onStatusClick = { },
+                                onStatusClick = { 
+                                    changingId = item.id
+                                    showSheet = true
+                                },
                                 onLongClick = { 
                                     showContextMenu = item.id
                                 }
@@ -242,17 +250,31 @@ fun StatisticsScreen(
             val cartridgeId = showContextMenu!!
             val cartridge = filteredData.find { it.id == cartridgeId }
             if (cartridge != null) {
+                // Сбрасываем предыдущее состояние редактирования при открытии нового контекстного меню
+                LaunchedEffect(cartridgeId) {
+                    editingCartridge = null
+                    showEditDialog = false
+                }
+                
                 ContextMenuDialog(
                     cartridge = cartridge,
-                    onDismiss = { showContextMenu = null },
-                    onEdit = {
-                        editingCartridge = cartridge
+                    onDismiss = { 
                         showContextMenu = null
+                        // Гарантируем сброс состояния редактирования при закрытии меню
+                        editingCartridge = null
+                        showEditDialog = false
+                    },
+                    onEdit = {
+                        showContextMenu = null
+                        // Обновляем editingCartridge ПЕРЕД открытием диалога
+                        editingCartridge = cartridge
                         showEditDialog = true
                     },
                     onDelete = {
                         vm.deleteById(cartridgeId)
                         showContextMenu = null
+                        editingCartridge = null
+                        showEditDialog = false
                     }
                 )
             }
@@ -260,15 +282,40 @@ fun StatisticsScreen(
         
         // Диалог редактирования картриджа
         if (showEditDialog && editingCartridge != null) {
-            EditCartridgeDialog(
-                cartridge = editingCartridge!!,
-                onDismiss = { showEditDialog = false; editingCartridge = null },
-                onSave = { number, room, model, date, status, notes ->
-                    vm.updateCartridge(editingCartridge!!.id, number, room, model, date, status, notes)
-                    showEditDialog = false
-                    editingCartridge = null
-                }
-            )
+            key(editingCartridge!!.id) {
+                // Получаем актуальную карточку из списка
+                val currentCartridge = filteredData.find { it.id == editingCartridge!!.id } ?: editingCartridge!!
+                EditCartridgeDialog(
+                    cartridge = currentCartridge,
+                    onDismiss = { 
+                        showEditDialog = false
+                        editingCartridge = null
+                    },
+                    onSave = { number, room, model, date, status, notes ->
+                        vm.updateCartridge(currentCartridge.id, number, room, model, date, status, notes)
+                        showEditDialog = false
+                        editingCartridge = null
+                    }
+                )
+            }
+        }
+        
+        // Модальный bottom sheet для выбора статуса
+        if (showSheet && changingId != null) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { 
+                    showSheet = false
+                    changingId = null
+                }, 
+                sheetState = sheetState
+            ) {
+                StatusSelectList(onPick = { st ->
+                    vm.updateStatus(changingId!!, st)
+                    showSheet = false
+                    changingId = null
+                })
+            }
         }
     }
 }
