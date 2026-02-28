@@ -49,6 +49,9 @@ interface CartridgeDao {
 
     @Query("SELECT COUNT(*) FROM cartridges")
     suspend fun getCartridgeCount(): Int
+
+    @Query("SELECT * FROM cartridges WHERE status = 'COLLECTED'")
+    suspend fun findAllWithStatusCollected(): List<CartridgeEntity>
 }
 
 

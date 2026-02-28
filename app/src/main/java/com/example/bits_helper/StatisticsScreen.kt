@@ -55,6 +55,7 @@ fun StatisticsScreen(
     var showContextMenu by remember { mutableStateOf<Long?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
     var editingCartridge by remember { mutableStateOf<CartridgeUi?>(null) }
+    var showHistoryDialog by remember { mutableStateOf<CartridgeUi?>(null) }
     
     // Инициализация дат по умолчанию
     val today = LocalDate.now()
@@ -253,9 +254,22 @@ fun StatisticsScreen(
                     onDelete = {
                         vm.deleteById(cartridgeId)
                         showContextMenu = null
+                    },
+                    onHistory = {
+                        showContextMenu = null
+                        showHistoryDialog = cartridge
                     }
                 )
             }
+        }
+        
+        // Диалог истории картриджа
+        if (showHistoryDialog != null) {
+            CartridgeHistoryDialog(
+                cartridge = showHistoryDialog!!,
+                vm = vm,
+                onDismiss = { showHistoryDialog = null }
+            )
         }
         
         // Диалог редактирования картриджа

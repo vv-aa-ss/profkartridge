@@ -9,9 +9,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFFD2B48C),
@@ -65,6 +68,17 @@ fun Bits_helperTheme(
     val colorScheme = when {
         shouldUseDarkTheme -> DarkColorScheme
         else -> LightColorScheme
+    }
+
+    SideEffect {
+        (context as? Activity)?.window?.let { window ->
+            window.statusBarColor = colorScheme.background.toArgb()
+            window.navigationBarColor = colorScheme.background.toArgb()
+            WindowCompat.getInsetsController(window, window.decorView)?.apply {
+                isAppearanceLightStatusBars = !shouldUseDarkTheme
+                isAppearanceLightNavigationBars = !shouldUseDarkTheme
+            }
+        }
     }
 
     MaterialTheme(

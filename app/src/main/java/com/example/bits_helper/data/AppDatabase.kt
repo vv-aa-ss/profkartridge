@@ -12,14 +12,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [CartridgeEntity::class, DepartmentEntity::class],
-    version = 3,
+    entities = [CartridgeEntity::class, DepartmentEntity::class, CartridgeHistoryEntity::class],
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun cartridgeDao(): CartridgeDao
     abstract fun departmentDao(): DepartmentDao
+    abstract fun cartridgeHistoryDao(): CartridgeHistoryDao
 
     companion object {
         @Volatile
@@ -49,7 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "bits_helper.db"
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
@@ -97,6 +98,21 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('Бухгалтерия', '201,202,203')")
                 db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('Отдел кадров', '301,302,303')")
                 db.execSQL("INSERT OR IGNORE INTO departments (name, rooms) VALUES ('Склад', '401,402,403')")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS cartridge_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        cartridgeNumber TEXT NOT NULL,
+                        date TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        room TEXT,
+                        model TEXT
+                    )
+                """)
             }
         }
     }

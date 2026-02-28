@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -69,6 +70,7 @@ import com.example.bits_helper.ui.CartridgeUi
 import com.example.bits_helper.ui.CartridgeViewModel
 import com.example.bits_helper.data.exportDatabase
 import com.example.bits_helper.data.importDatabase
+import com.example.bits_helper.data.CartridgeHistoryEntity
 import com.example.bits_helper.data.Status
 import com.example.bits_helper.data.getRussianName
 import com.example.bits_helper.data.SyncManager
@@ -92,7 +94,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val database = AppDatabase.get(applicationContext)
-        val repository = CartridgeRepository(database.cartridgeDao(), database.departmentDao())
+        val repository = CartridgeRepository(database.cartridgeDao(), database.departmentDao(), database.cartridgeHistoryDao())
         setContent {
             val vm: CartridgeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -138,6 +140,7 @@ fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
         var showDepartmentManagement by remember { mutableStateOf(false) }
         var showScanResult by remember { mutableStateOf(false) }
         var scanResult by remember { mutableStateOf<com.example.bits_helper.data.StatusUpdateResult?>(null) }
+        var showHistoryDialog by remember { mutableStateOf<CartridgeUi?>(null) }
         val snackbarHostState = remember { SnackbarHostState() }
         val items = vm.cartridges.collectAsState(initial = emptyList()).value
         
@@ -294,9 +297,20 @@ fun App(vm: CartridgeViewModel, activity: ComponentActivity) {
                             CoroutineScope(Dispatchers.Main).launch {
                                 snackbarHostState.showSnackbar("Картридж удален")
                             }
+                        },
+                        onHistory = {
+                            showContextMenu = null
+                            showHistoryDialog = cartridge
                         }
                     )
                 }
+            }
+            if (showHistoryDialog != null) {
+                CartridgeHistoryDialog(
+                    cartridge = showHistoryDialog!!,
+                    vm = vm,
+                    onDismiss = { showHistoryDialog = null }
+                )
             }
         }
         
@@ -1090,7 +1104,8 @@ fun ContextMenuDialog(
     cartridge: CartridgeUi,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onHistory: (() -> Unit)? = null
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1098,6 +1113,16 @@ fun ContextMenuDialog(
         text = { Text("Номер: ${cartridge.number}\nКабинет: ${cartridge.room}") },
         confirmButton = {
             Row {
+                if (onHistory != null) {
+                    Button(
+                        onClick = onHistory,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                        contentPadding = PaddingValues(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.History, contentDescription = "История", modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
                 Button(
                     onClick = onEdit,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0078D4)),
@@ -1118,6 +1143,58 @@ fun ContextMenuDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Отмена") }
         }
+    )
+}
+
+@Composable
+private fun statusColor(status: com.example.bits_helper.data.Status): Color {
+    return when (status) {
+        com.example.bits_helper.data.Status.ISSUED -> Color(0xFF10B981)
+        com.example.bits_helper.data.Status.IN_REFILL -> Color(0xFFEAB308)
+        com.example.bits_helper.data.Status.COLLECTED -> Color(0xFF6B7280)
+        com.example.bits_helper.data.Status.RECEIVED -> Color(0xFF1D4ED8)
+        com.example.bits_helper.data.Status.LOST -> Color(0xFFEF4444)
+        com.example.bits_helper.data.Status.WRITTEN_OFF -> Color(0xFF8B5CF6)
+    }
+}
+
+@Composable
+fun CartridgeHistoryDialog(
+    cartridge: CartridgeUi,
+    vm: CartridgeViewModel,
+    onDismiss: () -> Unit
+) {
+    var history by remember { mutableStateOf<List<CartridgeHistoryEntity>>(emptyList()) }
+    LaunchedEffect(cartridge.number) {
+        vm.getHistoryByNumber(cartridge.number) { history = it }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("История картриджа ${cartridge.number}", fontWeight = FontWeight.SemiBold) },
+        text = {
+            if (history.isEmpty()) {
+                Text("История пуста. Записи появятся при смене статуса.")
+            } else {
+                Column(Modifier.fillMaxWidth()) {
+                    history.forEach { entry ->
+                        val dateFormatted = try {
+                            val parts = entry.date.split("-")
+                            if (parts.size == 3) "${parts[2]}.${parts[1]}.${parts[0]}" else entry.date
+                        } catch (_: Exception) { entry.date }
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(dateFormatted, fontWeight = FontWeight.Medium, modifier = Modifier.width(80.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(entry.status.getRussianName(), color = statusColor(entry.status))
+                            entry.room?.let { Text(" • $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
     )
 }
 

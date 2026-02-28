@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bits_helper.data.CartridgeRepository
 import com.example.bits_helper.data.CartridgeEntity
+import com.example.bits_helper.data.CartridgeHistoryEntity
 import com.example.bits_helper.data.DepartmentEntity
 import com.example.bits_helper.data.Status
 import com.example.bits_helper.data.StatusUpdateResult
@@ -83,6 +84,13 @@ class CartridgeViewModel(
         viewModelScope.launch {
             val entity = repository.findById(id)
             onResult(entity?.toUi())
+        }
+    }
+
+    fun getHistoryByNumber(number: String, onResult: (List<CartridgeHistoryEntity>) -> Unit) {
+        viewModelScope.launch {
+            val history = repository.getHistoryByNumber(number)
+            onResult(history)
         }
     }
 
